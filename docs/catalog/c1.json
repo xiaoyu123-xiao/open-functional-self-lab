@@ -1,0 +1,5 @@
+{
+  "url": "https://github.com/xiaoyu123-xiao/open-functional-self-lab/blob/main/docs/metrics.md",
+  "title": "持久性基线在多步预测上优于随机猜测",
+  "summary": "8x8 网格环境、600 步样本：persistence 平均绝对偏差 0.0215，random 为 1.6370；差异远超噪声，可作为下界校验。"
+}

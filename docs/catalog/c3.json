@@ -1,0 +1,5 @@
+{
+  "url": "https://github.com/xiaoyu123-xiao/open-functional-self-lab/blob/main/CHANGELOG.md",
+  "title": "预算闸门必须返回退出码 3 而不是警告",
+  "summary": "超限时抛异常并回滚到 READY，回归脚本守着这个数字；警告式实现会让长跑实验静默烧预算。"
+}

@@ -1,0 +1,5 @@
+{
+  "url": "https://github.com/xiaoyu123-xiao/open-functional-self-lab/blob/main/docs/logic-audit.md",
+  "title": "单步最优占比在并列时会超过 100%",
+  "summary": "判平局用相等比较会让多个预测器同时记胜，实测合计 168.2%；改为严格最优并单独统计并列后回到 100%。"
+}

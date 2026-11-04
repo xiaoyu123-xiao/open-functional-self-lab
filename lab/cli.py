@@ -29,7 +29,9 @@ from .clock import Clock, FakeClock, parse_iso, to_iso
 from .ledger import Ledger
 from .notify import DEDUPE_HOURS, LEVELS, Notifier
 from .predict import benchmark as run_benchmark
+from .knowledge import KnowledgeBase
 from .selfmodel import SelfModel
+from .web import LiveFetcher, OfflineFetcher, fetch_many
 from .predict import render_report as render_bench
 from .report import render as render_report
 from .state import STATES, IllegalTransition, StateStore
@@ -92,6 +94,9 @@ class Context:
                 else:
                     merged[key] = value
         return merged
+
+    def knowledge(self) -> KnowledgeBase:
+        return KnowledgeBase(self.state_dir / "knowledge.jsonl")
 
     def self_model(self) -> SelfModel:
         return SelfModel(self.state_dir / "self.json")
@@ -602,6 +607,104 @@ def cmd_review(args: argparse.Namespace, ctx: Context) -> int:
     return EXIT_OK
 
 
+# ---------------------------------------------------------------- learn / knowledge
+
+
+def cmd_learn(args: argparse.Namespace, ctx: Context) -> int:
+    """从白名单取样 → 抽成声明入库。默认离线（读 docs/catalog 里的样本）。"""
+    catalog = Path(args.catalog) if args.catalog else (ctx.root / "docs" / "catalog")
+    if args.online:
+        if not args.url:
+            _emit("--online 需要至少一个 --url，且域名必须在白名单里")
+            return EXIT_USAGE
+        urls = list(args.url)
+        fetcher = LiveFetcher(allow_network=True)
+    else:
+        if not catalog.exists():
+            _emit(f"离线目录不存在：{catalog}")
+            return EXIT_FAIL
+        docs = [json.loads(item.read_text(encoding="utf-8-sig")) for item in sorted(catalog.glob("*.json"))]
+        urls = [str(doc["url"]) for doc in docs]
+        fetcher = OfflineFetcher(catalog)
+
+    budget = ctx.budget()
+    documents, errors = fetch_many(fetcher, urls, budget_charge=lambda kind, amount: budget.charge(kind, amount))
+    knowledge = ctx.knowledge()
+    now = ctx.clock.now_iso()
+    added = 0
+    for document in documents:
+        entry = knowledge.add(
+            claim=document.get("title") or document.get("summary", "")[:80],
+            source_url=document["url"],
+            evidence=document.get("summary", ""),
+            accessed_at=now,
+            tags=list(args.tag or []),
+        )
+        if entry is not None:
+            added += 1
+    changed = knowledge.recompute_status(now)
+    ctx.ledger.append(
+        "learn",
+        {
+            "fetcher": "live" if args.online else "offline",
+            "requested": len(urls),
+            "fetched": len(documents),
+            "added": added,
+            "errors": len(errors),
+        },
+        now,
+    )
+    _emit(f"取样 {len(documents)}/{len(urls)} 条，入库 {added} 条新声明，状态重算 {len(changed)} 条")
+    for error in errors[:3]:
+        _emit(f"  跳过 {error['url']}：{error['reason']}")
+    stats = knowledge.stats()
+    _emit(f"知识库：共 {stats['total']} 条，状态 {stats['by_status']}，来源域名 {len(stats['domains'])} 个")
+    if not args.online:
+        _emit("（离线模式：用的是 docs/catalog 里的样本，没有访问真实网络）")
+    return EXIT_OK
+
+
+def cmd_knowledge(args: argparse.Namespace, ctx: Context) -> int:
+    knowledge = ctx.knowledge()
+    action = args.action
+
+    if action == "check":
+        ok, detail = knowledge.verify_hashes()
+        _emit(f"[{'OK' if ok else 'FAIL'}] 知识库哈希：{detail}")
+        return EXIT_OK if ok else EXIT_FAIL
+
+    if action == "review":
+        due = knowledge.due_for_review(ctx.clock.now_iso())
+        if not due:
+            _emit("没有到期待复审的条目。")
+            return EXIT_OK
+        for entry in due:
+            knowledge.review(int(entry["id"]), "pending", ctx.clock.now_iso(), note="到期自动降级为待验证")
+        _emit(f"{len(due)} 条到期，已降级为「待验证」并延长复审周期")
+        return EXIT_OK
+
+    entries = knowledge.current()
+    if not entries:
+        _emit("知识库是空的。先跑：python -m lab.cli learn")
+        return EXIT_OK
+
+    if action == "list":
+        for entry in entries:
+            _emit(
+                f"#{entry['id']} [{entry['verification_status']}] {entry['claim']}"
+                f"　← {entry['source_id']}（{entry['accessed_at']}，复审 {entry['next_review_at'][:10]}）"
+            )
+        return EXIT_OK
+
+    stats = knowledge.stats()
+    _emit(f"共 {stats['total']} 条声明，来源域名 {len(stats['domains'])} 个")
+    for status, count in sorted(stats["by_status"].items()):
+        _emit(f"  {status}: {count}")
+    due = knowledge.due_for_review(ctx.clock.now_iso())
+    _emit(f"到期待复审：{len(due)} 条")
+    return EXIT_OK
+
+
 # ---------------------------------------------------------------- self
 
 
@@ -771,6 +874,17 @@ def build_parser() -> argparse.ArgumentParser:
     p_bench.add_argument("--steps", type=int, default=200, help="每个 seed 跑多少步")
     p_bench.add_argument("--seeds", type=int, default=3, help="用几个 seed（1..N）")
     p_bench.set_defaults(func=cmd_bench)
+
+    p_learn = sub.add_parser("learn", help="从白名单取样并入库（默认离线，读 docs/catalog）")
+    p_learn.add_argument("--catalog", default=None, help="离线样本目录")
+    p_learn.add_argument("--online", action="store_true", help="真的联网（需白名单 + 预算 + 人工批准）")
+    p_learn.add_argument("--url", action="append", default=None, help="联网时取哪些 URL（可重复）")
+    p_learn.add_argument("--tag", action="append", default=None)
+    p_learn.set_defaults(func=cmd_learn)
+
+    p_knowledge = sub.add_parser("knowledge", help="知识库：stats / list / review / check")
+    p_knowledge.add_argument("action", nargs="?", default="stats", choices=["stats", "list", "review", "check"])
+    p_knowledge.set_defaults(func=cmd_knowledge)
 
     p_self = sub.add_parser("self", help="自我模型：身份 / 能力自评 / 失败模式 / 目标")
     p_self.add_argument("action", nargs="?", default="show", choices=["show", "init", "goal-add", "goal-done"])

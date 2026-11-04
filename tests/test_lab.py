@@ -25,6 +25,8 @@ from lab.clock import Clock, FakeClock, elapsed_seconds, parse_iso, to_iso  # no
 from lab.env import GridWorld, greedy_action  # noqa: E402
 from lab.notify import Notifier  # noqa: E402
 from lab.selfmodel import SelfModel  # noqa: E402
+from lab.knowledge import KnowledgeBase  # noqa: E402
+from lab.web import LiveFetcher, NotAllowed, OfflineFetcher, check_url, is_allowed  # noqa: E402
 from lab.predict import Linear, Persistence, benchmark, error, sparkline  # noqa: E402
 from lab.ledger import Ledger  # noqa: E402
 from lab.policy import scan, scan_text, summarize  # noqa: E402
@@ -350,6 +352,90 @@ class PredictTests(unittest.TestCase):
         self.assertEqual(len(sparkline([0.1, 0.2, 0.3])), 3)
         self.assertEqual(len(sparkline(list(range(200)), width=20)), 20)
         self.assertEqual(sparkline([]), "")
+
+
+class IngestTests(unittest.TestCase):
+    """v0.3：白名单取样 → 声明入库 → 独立性判定 → 复审。"""
+
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+        self.kb = KnowledgeBase(self.root / "knowledge.jsonl")
+        self.ts = "2026-01-01T00:00:00Z"
+
+    def tearDown(self) -> None:
+        self.tmp.cleanup()
+
+    def test_allowlist_gate(self) -> None:
+        self.assertTrue(is_allowed("https://export.arxiv.org/api/query?x=1"))
+        self.assertFalse(is_allowed("https://www.google.com/search?q=1"))
+        with self.assertRaises(NotAllowed):
+            check_url("https://export.arxiv.org/api/query", allow_network=False)
+        with self.assertRaises(NotAllowed):
+            check_url("https://evil.example.com/", allow_network=True)
+
+    def test_live_fetcher_refuses_by_default(self) -> None:
+        with self.assertRaises(NotAllowed):
+            LiveFetcher(allow_network=False).fetch("https://export.arxiv.org/api/query")
+
+    def test_offline_fetcher_reads_catalog(self) -> None:
+        catalog = self.root / "catalog"
+        catalog.mkdir()
+        (catalog / "a.json").write_text(
+            json.dumps({"url": "https://api.openalex.org/w/1", "title": "t", "summary": "s"}, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        doc = OfflineFetcher(catalog).fetch("https://api.openalex.org/w/1")
+        self.assertEqual(doc["title"], "t")
+        with self.assertRaises(FileNotFoundError):
+            OfflineFetcher(catalog).fetch("https://api.openalex.org/w/2")
+
+    def test_add_dedupes_same_claim_same_domain(self) -> None:
+        first = self.kb.add(claim="X 有效", source_url="https://api.openalex.org/a", accessed_at=self.ts)
+        second = self.kb.add(claim="X  有效", source_url="https://api.openalex.org/b", accessed_at=self.ts)
+        self.assertIsNotNone(first)
+        self.assertIsNone(second)
+        self.assertEqual(len(self.kb.current()), 1)
+
+    def test_two_domains_make_it_verified(self) -> None:
+        self.kb.add(claim="Y 成立", source_url="https://api.openalex.org/a", accessed_at=self.ts)
+        self.kb.add(claim="Y 成立", source_url="https://export.arxiv.org/b", accessed_at=self.ts)
+        self.assertEqual(self.kb.independent_sources("Y 成立"), 2)
+        changed = self.kb.recompute_status(self.ts)
+        self.assertTrue(changed)
+        self.assertEqual(self.kb.current()[0]["verification_status"], "verified")
+
+    def test_due_for_review_and_downgrade(self) -> None:
+        self.kb.add(claim="Z 待查", source_url="https://api.openalex.org/a", accessed_at=self.ts, ttl_days=10)
+        self.assertEqual(self.kb.due_for_review("2026-01-05T00:00:00Z"), [])
+        due = self.kb.due_for_review("2026-02-01T00:00:00Z")
+        self.assertEqual(len(due), 1)
+        self.ts_later = "2026-02-01T00:00:00Z"
+        self.kb.review(int(due[0]["id"]), "pending", self.ts_later, note="到期")
+        self.assertEqual(self.kb.current()[0]["verification_status"], "pending")
+
+    def test_hash_chain_detects_tampering(self) -> None:
+        self.kb.add(claim="W", source_url="https://api.openalex.org/a", accessed_at=self.ts)
+        ok, _ = self.kb.verify_hashes()
+        self.assertTrue(ok)
+        lines = (self.root / "knowledge.jsonl").read_text(encoding="utf-8").splitlines()
+        entry = json.loads(lines[0])
+        entry["claim"] = "被改过的声明"
+        (self.root / "knowledge.jsonl").write_text(json.dumps(entry, ensure_ascii=False) + "\n", encoding="utf-8")
+        ok, detail = self.kb.verify_hashes()
+        self.assertFalse(ok)
+        self.assertIn("被改写", detail)
+
+    def test_cli_learn_offline(self) -> None:
+        root = Path(self.tmp.name)
+        args = ["--root", str(root), "--fake-now", self.ts]
+        self.assertEqual(cli_main([*args, "init"]), 0)
+        self.assertEqual(cli_main([*args, "learn", "--catalog", str(REPO / "docs" / "catalog")]), 0)
+        kb = root / "state" / "knowledge.jsonl"
+        self.assertTrue(kb.exists())
+        self.assertEqual(len(kb.read_text(encoding="utf-8").strip().splitlines()), 3)
+        self.assertEqual(cli_main([*args, "knowledge"]), 0)
+        self.assertEqual(cli_main([*args, "knowledge", "check"]), 0)
 
 
 class SelfModelTests(unittest.TestCase):
