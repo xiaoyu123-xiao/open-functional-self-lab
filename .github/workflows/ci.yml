@@ -16,7 +16,9 @@ concurrency:
 jobs:
   test:
     name: py${{ matrix.python-version }}
-    runs-on: ubuntu-latest
+    # 固定镜像而不是 ubuntu-latest：latest 会随平台迁移（2026-10 起已切到 26.04），
+    # 一次迁移就可能让"昨天还绿"的构建变红。要升级时改这一行，并在 CHANGELOG 记一笔。
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
