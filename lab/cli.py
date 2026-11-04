@@ -32,6 +32,7 @@ from .predict import benchmark as run_benchmark
 from .collab import analyse as analyse_behaviour
 from .core import evaluate_policy, load_object, run_generic_episode
 from .lessons import ExperimentReport, check_experiment, summary as lessons_summary
+from .benchmark import format_report as format_reference, run_reference
 from .collab import build_proposals, emergent_gap, record_choice
 from .knowledge import KnowledgeBase
 from .perm import Permissions
@@ -619,6 +620,27 @@ def cmd_review(args: argparse.Namespace, ctx: Context) -> int:
     )
     ctx.ledger.append("transition", record, ctx.clock.now_iso(), actor=f"human:{args.by}")
     _emit("评审不通过：已回滚到 READY，请先看 state/reports/ 再决定下一步。")
+    return EXIT_OK
+
+
+# ---------------------------------------------------------------- ref (参考任务)
+
+
+def cmd_ref(args: argparse.Namespace, ctx: Context) -> int:
+    """在冻结的参考任务上下结论；探路结果不许走这里。"""
+    if args.repeats < 10 and not args.explore:
+        _emit("参考任务要求至少 10 组（教训 L01）。只是探路请加 --explore，且结果不得写进结论。")
+        return EXIT_USAGE
+    result = run_reference(repeats=args.repeats)
+    _emit(format_reference(result))
+    if args.explore:
+        _emit("（探路模式：以上数字不得写进结论或总结表）")
+    ctx.ledger.append(
+        "ref_run",
+        {"reference": result["reference"], "repeats": result["repeats"],
+         "ate": result["ate"], "hurt": result["hurt"], "explore": bool(args.explore)},
+        ctx.clock.now_iso(),
+    )
     return EXIT_OK
 
 
@@ -1371,6 +1393,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_auto.add_argument("--lethal", action="store_true")
     p_auto.add_argument("--armor", action="store_true")
     p_auto.set_defaults(func=cmd_auto)
+
+    p_ref = sub.add_parser("ref", help="冻结参考任务：唯一允许下结论的地方")
+    p_ref.add_argument("--repeats", type=int, default=12)
+    p_ref.add_argument("--explore", action="store_true", help="探路模式（结果不得当结论）")
+    p_ref.set_defaults(func=cmd_ref)
 
     p_lessons = sub.add_parser("lessons", help="教训库：列出/校验一次实验的凭据")
     p_lessons.add_argument("--check", action="store_true", help="按教训检查这份结果")

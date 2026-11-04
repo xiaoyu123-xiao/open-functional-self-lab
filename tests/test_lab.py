@@ -553,6 +553,40 @@ class WeightedHeadTests(unittest.TestCase):
         self.assertEqual(len(summary["multi"]["runs"][0]["rows"]), len(HELDOUT_CONFIGS))
 
 
+class ReferenceBenchmarkTests(unittest.TestCase):
+    """v0.40：冻结参考任务 + 探路/结论两级协议。"""
+
+    def test_reference_is_frozen(self) -> None:
+        from lab.benchmark import REFERENCE, REFERENCE_VERSION
+
+        self.assertEqual(REFERENCE_VERSION, "ref-1")
+        self.assertEqual(REFERENCE["size"], 10)
+        self.assertEqual(REFERENCE["hazards"], 6)
+        self.assertFalse(REFERENCE["lethal"])
+
+    def test_reference_result_shape(self) -> None:
+        from lab.benchmark import run_reference
+
+        result = run_reference(repeats=2)
+        for key in ("ate", "hurt", "score"):
+            self.assertIn(key, result)
+            self.assertIn("mean", result[key])
+        self.assertEqual(len(result["raw"]["ate"]), 2)
+
+    def test_small_sample_is_rejected_as_claim(self) -> None:
+        from lab.benchmark import run_reference, verdict
+
+        result = run_reference(repeats=3)
+        problems = verdict(result)
+        self.assertTrue(any("L01" in item for item in problems))
+
+    def test_cli_ref_refuses_under_ten(self) -> None:
+        root = tempfile.mkdtemp()
+        code = cli_main(["--root", root, "--fake-now", "2026-01-01T00:00:00Z", "init"])
+        self.assertEqual(code, 0)
+        self.assertEqual(cli_main(["--root", root, "--fake-now", "2026-01-01T00:00:00Z", "ref", "--repeats", "3"]), 2)
+
+
 class LessonRegistryTests(unittest.TestCase):
     """v0.39：教训必须"有牙齿"——每条都能指向真实存在的执行位置。"""
 
