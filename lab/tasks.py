@@ -48,6 +48,39 @@ def assert_disjoint() -> None:
         raise AssertionError("训练与评测 seed 重叠：这会让所有'变强'的结论失效")
 
 
+def _shield(agent: Any, env: GridWorld, state: str, action: str) -> str:
+    """安全护栏（v0.46）：如果策略选的动作会踩进危险区，就换成"次优但安全"的动作。
+
+    这是把三件事合起来的关键：
+      吃食靠规划特征（下一跳方向）   → 吃得够
+      受伤靠护栏（危险区否决）       → 伤得少
+      两者都在同一个"预算"目标下评估 → 可比较
+
+    注意：护栏只否决"已知会受伤"的动作，不改变策略本身的学习信号。
+    """
+    if action == "rest":
+        return action
+    try:
+        target = env._target(action)
+    except Exception:
+        return action
+    if target not in env.hazards:
+        return action
+    if hasattr(agent, "value"):
+        ranking = sorted(agent.value(state), key=agent.value(state).get, reverse=True)
+    else:
+        ranking = ["up", "down", "left", "right", "rest"]   # 无价值函数时的固定回退
+    for candidate in ranking:
+        if candidate == "rest":
+            return "rest"
+        try:
+            if env._target(candidate) not in env.hazards:
+                return candidate
+        except Exception:
+            continue
+    return "rest"
+
+
 def run_episode(
     agent: QLearningAgent,
     seed: int,
@@ -72,14 +105,18 @@ def run_episode(
     shaping: str = "legacy",
     explore_bonus: float = 0.0,
     starve_ends: bool = False,
+    shield: bool = False,
 ) -> Dict[str, Any]:
     environment = GridWorld(seed, hazards=hazards, lethal=lethal, armor=armor, size=size, layout=layout, slippery=slippery, hazard_drift=hazard_drift, one_hit=one_hit, starve_ends=starve_ends)
+    environment.avoid_hazards = bool(shield)   # v0.46：护栏模式下，规划特征把危险区当墙
     state = state_of(environment, with_walls=with_walls, with_path=with_path)
     total_reward = 0.0
     ate = hurt = 0
     visits: Dict[str, int] = {}
     for _ in range(steps):
         action = agent.act(state, epsilon=epsilon) if train else agent.best_action(state)
+        if shield:
+            action = _shield(agent, environment, state, action)
         previous_distance = _distance_to_food(environment)
         outcome = environment.step(action)
         following = state_of(environment, with_walls=with_walls, with_path=with_path)
@@ -139,6 +176,7 @@ def train(
     shaping: str = "legacy",
     explore_bonus: float = 0.0,
     starve_ends: bool = False,
+    shield: bool = False,
 ) -> Dict[str, Any]:
     results = [
         run_episode(
@@ -147,7 +185,7 @@ def train(
             slippery=slippery, hazard_drift=hazard_drift, hurt_penalty=hurt_penalty, one_hit=one_hit,
             survival_bonus=survival_bonus, death_penalty=death_penalty,
             bonus_requires_progress=bonus_requires_progress, shaping=shaping, explore_bonus=explore_bonus,
-            starve_ends=starve_ends,
+            starve_ends=starve_ends, shield=shield,
         )
         for seed in seeds
     ]
@@ -159,9 +197,9 @@ def train(
     }
 
 
-def evaluate(agent: QLearningAgent, seeds: Sequence[int], steps: int, hazards: int = 4, with_walls: bool = False, lethal: bool = False, armor: bool = False, size: int = 8, layout: str = "random", with_path: bool = False, slippery: float = 0.0, hazard_drift: int = 0, hurt_penalty: float = -1.0, one_hit: bool = False, survival_bonus: float = 0.0, death_penalty: float = -5.0, bonus_requires_progress: bool = False, shaping: str = "legacy", explore_bonus: float = 0.0, starve_ends: bool = False) -> Dict[str, Any]:
+def evaluate(agent: QLearningAgent, seeds: Sequence[int], steps: int, hazards: int = 4, with_walls: bool = False, lethal: bool = False, armor: bool = False, size: int = 8, layout: str = "random", with_path: bool = False, slippery: float = 0.0, hazard_drift: int = 0, hurt_penalty: float = -1.0, one_hit: bool = False, survival_bonus: float = 0.0, death_penalty: float = -5.0, bonus_requires_progress: bool = False, shaping: str = "legacy", explore_bonus: float = 0.0, starve_ends: bool = False, shield: bool = False) -> Dict[str, Any]:
     """固定 seed、固定步数、**不学习**。这是唯一被允许用来宣称"变强了"的分数。"""
-    results = [run_episode(agent, seed, steps, train=False, hazards=hazards, with_walls=with_walls, lethal=lethal, armor=armor, size=size, layout=layout, with_path=with_path, slippery=slippery, hazard_drift=hazard_drift, hurt_penalty=hurt_penalty, one_hit=one_hit, survival_bonus=survival_bonus, death_penalty=death_penalty, bonus_requires_progress=bonus_requires_progress, shaping=shaping, explore_bonus=explore_bonus, starve_ends=starve_ends) for seed in seeds]
+    results = [run_episode(agent, seed, steps, train=False, hazards=hazards, with_walls=with_walls, lethal=lethal, armor=armor, size=size, layout=layout, with_path=with_path, slippery=slippery, hazard_drift=hazard_drift, hurt_penalty=hurt_penalty, one_hit=one_hit, survival_bonus=survival_bonus, death_penalty=death_penalty, bonus_requires_progress=bonus_requires_progress, shaping=shaping, explore_bonus=explore_bonus, starve_ends=starve_ends, shield=shield) for seed in seeds]
     return {
         "episodes": len(results),
         "mean_return": round(sum(item["return"] for item in results) / len(results), 4),
@@ -171,12 +209,13 @@ def evaluate(agent: QLearningAgent, seeds: Sequence[int], steps: int, hazards: i
     }
 
 
-def baseline_score(seeds: Sequence[int], steps: int, hazards: int = 4, lethal: bool = False, armor: bool = False, size: int = 8, layout: str = "random", with_path: bool = False, slippery: float = 0.0, hazard_drift: int = 0, hurt_penalty: float = -1.0, one_hit: bool = False, survival_bonus: float = 0.0, death_penalty: float = -5.0, bonus_requires_progress: bool = False, shaping: str = "legacy", explore_bonus: float = 0.0, starve_ends: bool = False) -> Dict[str, Any]:
+def baseline_score(seeds: Sequence[int], steps: int, hazards: int = 4, lethal: bool = False, armor: bool = False, size: int = 8, layout: str = "random", with_path: bool = False, slippery: float = 0.0, hazard_drift: int = 0, hurt_penalty: float = -1.0, one_hit: bool = False, survival_bonus: float = 0.0, death_penalty: float = -5.0, bonus_requires_progress: bool = False, shaping: str = "legacy", explore_bonus: float = 0.0, starve_ends: bool = False, shield: bool = False) -> Dict[str, Any]:
     """对照组：BFS 贪心基线（就是 v0.1–v0.3 用的那个）。"""
     total = 0.0
     ate = hurt = 0
     for seed in seeds:
         environment = GridWorld(seed, hazards=hazards, lethal=lethal, armor=armor, size=size, layout=layout, slippery=slippery, hazard_drift=hazard_drift, one_hit=one_hit, starve_ends=starve_ends)
+        environment.avoid_hazards = bool(shield)   # v0.46：护栏模式下，规划特征把危险区当墙
         previous_distance = _distance_to_food(environment)
         for _ in range(steps):
             previous_distance = _distance_to_food(environment)

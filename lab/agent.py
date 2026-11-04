@@ -137,7 +137,8 @@ def _next_step(env: GridWorld) -> str:
     start = env.agent
     if start in env.food:
         return "n0"
-    order = [((0, -1), 1), ((0, 1), 2), ((-1, 0), 3), ((1, 0), 4)]   # 上/下/左/右
+    order = [((0, 1), 1), ((0, -1), 2), ((-1, 0), 3), ((1, 0), 4)]   # 上/下/左/右（与 env.moves 一致）
+    blocked = set(env.walls) | (set(env.hazards) if getattr(env, "avoid_hazards", False) else set())
     parent = {start: None}
     first = {start: None}
     frontier = deque([start])
@@ -150,7 +151,7 @@ def _next_step(env: GridWorld) -> str:
             return f"n{first[node] or 0}"
         for (dx, dy), code in order:
             nxt = (current[0] + dx, current[1] + dy)
-            if nxt in parent or nxt in env.walls:
+            if nxt in parent or nxt in blocked:
                 continue
             if not (0 <= nxt[0] < env.size and 0 <= nxt[1] < env.size):
                 continue
