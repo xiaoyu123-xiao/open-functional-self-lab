@@ -1,5 +1,7 @@
 # 一页看懂
 
+> [中文](ONE-PAGE.md) | [English](ONE-PAGE.en.md)
+
 > 这一页就够。看不懂代码也能看完。
 
 ---

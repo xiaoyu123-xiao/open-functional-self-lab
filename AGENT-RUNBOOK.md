@@ -1,5 +1,7 @@
 # 另一个 AI 接手时该怎么做（Agent Runbook）
 
+> [中文](AGENT-RUNBOOK.md) | [English](AGENT-RUNBOOK.en.md)
+
 > 这份文档不是给人看的，是给**另一个执行型 AI**（Claude Code / Codex / Cursor / DSH / 自建 agent）看的。
 > 目标：让它拿到仓库后知道**先做什么、验收标准是什么、什么情况必须停**。
 
