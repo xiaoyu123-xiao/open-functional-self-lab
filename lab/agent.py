@@ -74,21 +74,35 @@ def _bucket_distance(env: GridWorld) -> int:
 # 结论：加特征不是免费的；要加就先换函数逼近（见 docs/experiments/0002-feature-bloat.md）。
 
 
-def state_of(env: GridWorld) -> str:
+def _wall_code(env: GridWorld) -> str:
+    """四个方向能不能走（上下左右，1=能走）。只在 state_mode="walls" 时进入状态。"""
+    from .env import SIZE
+
+    x, y = env.agent
+    code = []
+    for dx, dy in ((0, 1), (0, -1), (-1, 0), (1, 0)):
+        nx, ny = x + dx, y + dy
+        legal = 0 <= nx < SIZE and 0 <= ny < SIZE and (nx, ny) not in env.walls
+        code.append("1" if legal else "0")
+    return "".join(code)
+
+
+def state_of(env: GridWorld, with_walls: bool = False) -> str:
     """状态 =（食物方向 | 距离档 | 能量档 | 损伤档）。
 
     v0.5 试过加入"四方向墙体"，结果状态数 126→948、留出分数 +2.6→-0.4，已撤回。
     要加特征必须先换函数逼近，否则是被状态爆炸拖死，不是"更聪明"。
     """
     observation = env.observe()
-    return "|".join(
-        [
-            _food_direction(env),
-            str(_bucket_distance(env)),
-            str(_bucket_energy(observation["energy"])),
-            str(_bucket_damage(observation["damage"])),
-        ]
-    )
+    parts = [
+        _food_direction(env),
+        str(_bucket_distance(env)),
+        str(_bucket_energy(observation["energy"])),
+        str(_bucket_damage(observation["damage"])),
+    ]
+    if with_walls:
+        parts.append(_wall_code(env))
+    return "|".join(parts)
 
 
 def _distance_to_food(env: GridWorld) -> int:

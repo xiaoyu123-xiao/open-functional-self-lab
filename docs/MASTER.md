@@ -118,7 +118,8 @@ python -m lab.cli verify                            # 账本/状态机/知识库
 | `lab/web.py` | 白名单取样（离线/在线两种 fetcher） | `learn --online` | ✅ 骨架 |
 | `lab/knowledge.py` | 声明入库、独立性、复审、哈希 | `knowledge` | ✅ 骨架 |
 | `lab/viz.py` / `lab/report.py` | 仪表盘 / 周报 | `viz` / `report` | ✅ |
-| `lab/agent.py` | 可学策略（表格 Q-learning，参数存 `state/policy.json`） | `train` / `eval` | ✅ |
+| `lab/agent.py` | 表格 Q-learning（`--algo tabular`，默认） | `train` / `eval` | ✅ |
+| `lab/linear.py` | 线性函数逼近 Q（`--algo linear`，可泛化但仍未超 BFS） | `train --algo linear` | ✅ |
 | `lab/tasks.py` | 训练/留出 seed 分离 + 课程 + BFS 对照 | `eval` | ✅ |
 | `lab/loop.py` | 自驱循环一轮：评测→训练→再评测→变差回滚 | `loop` | ✅ |
 | `lab/plugins/` | 插件接口（manifest + 红线 + 预算声明） | — | ⬜ 下一版 |
@@ -189,7 +190,7 @@ python -m lab.cli verify                            # 账本/状态机/知识库
 
 | 未实现 | 影响 | 计划 |
 |---|---|---|
-| 策略仍打不过 BFS 基线 | 留出 +2.2 vs 基线 +3.6（见 `docs/experiments/0001-learnability.md`） | 换线性函数逼近（表格法已试过加特征，负结果见 0002） |
+| 策略打不过 BFS 基线 | 表格 +2.45 / 线性 +2.35 vs 基线 +3.57（实验 0003） | **改任务设计**：让 BFS 不再是优解（危险区挡路 / 食物移动），M1' 判据 = 达到基线 1.05 倍 |
 | 持续训练会退化 | 已用学习率衰减修好（`docs/experiments/0002-negative-results.md`） | ✅ 已修 |
 | 课程机制只有 seed 分段 | 难度还没自动递增 | 下一版 |
 | 插件接口 | 加功能要改代码 | v0.4 |
@@ -207,7 +208,8 @@ python -m lab.cli verify                            # 账本/状态机/知识库
 | 版本 | 内容 | 验收 |
 |---|---|---|
 | **v0.4**（本版） | 可学策略 + 训练/留出分离 + 循环回滚 | 留出分数必须上升，否则回滚并记录（已达成） |
-| **v0.5** | 策略追上并超过 BFS；课程自动加难；知识参与决策 | M1: ≥ +3.565 连续 3 轮；M2: ≥ +4.28 |
+| **v0.6**（本版） | 线性函数逼近 + `--algo` 切换 | 已实现；结论：线性未超表格，两者都未超 BFS |
+| **v0.7** | 任务重设计：危险区挡路 + 食物移动，让 BFS 不再最优 | M1': 学习器 ≥ 基线 ×1.05 连续 3 轮 |
 | **v0.4** | 插件接口：`lab/plugins/*.py` + manifest（能力、预算、红线扫描） | 不改编 core 就能加一种新取样源 |
 | **v1.0** | 长期运行：checkpoint 真恢复、真实计时、7×24 稳定性报告 | 断电重启后能接上并说明"我停在哪" |
 

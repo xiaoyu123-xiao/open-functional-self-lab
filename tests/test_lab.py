@@ -27,6 +27,7 @@ from lab.notify import Notifier  # noqa: E402
 from lab.selfmodel import SelfModel  # noqa: E402
 from lab.knowledge import KnowledgeBase  # noqa: E402
 from lab.agent import QLearningAgent  # noqa: E402
+from lab.linear import STATE_DIM, STATE_DIM_WITH_WALLS, LinearQAgent, featurize  # noqa: E402
 from lab.tasks import assert_disjoint, baseline_score, eval_seeds, evaluate, train, train_seeds  # noqa: E402
 from lab.loop import cycle  # noqa: E402
 from lab.web import LiveFetcher, NotAllowed, OfflineFetcher, check_url, is_allowed  # noqa: E402
@@ -355,6 +356,36 @@ class PredictTests(unittest.TestCase):
         self.assertEqual(len(sparkline([0.1, 0.2, 0.3])), 3)
         self.assertEqual(len(sparkline(list(range(200)), width=20)), 20)
         self.assertEqual(sparkline([]), "")
+
+
+class LinearAgentTests(unittest.TestCase):
+    """v0.6：线性函数逼近（不是表格）。"""
+
+    def test_feature_dimensions(self) -> None:
+        self.assertEqual(len(featurize("R=|1|2|0")), STATE_DIM)
+        self.assertEqual(len(featurize("L=|3|0|1|1010")), STATE_DIM)
+
+    def test_linear_learns(self) -> None:
+        agent = LinearQAgent(seed=0)
+        evaluation = eval_seeds(6)
+        before = evaluate(agent, evaluation, 40)["mean_return"]
+        for _ in range(3):
+            train(agent, train_seeds(25), 40, epsilon=0.3)
+        after = evaluate(agent, evaluation, 40)["mean_return"]
+        self.assertGreater(after, before + 1.5, msg=f"训练前 {before} 训练后 {after}")
+
+    def test_linear_roundtrip_and_algo_guard(self) -> None:
+        path = Path(tempfile.mkdtemp()) / "policy.json"
+        agent = LinearQAgent(path, seed=0)
+        train(agent, train_seeds(10), 30, epsilon=0.3)
+        agent.save()
+        reloaded = LinearQAgent(path).load()
+        self.assertEqual(reloaded.updates, agent.updates)
+        self.assertEqual(len(reloaded.w["up"]), STATE_DIM_WITH_WALLS)
+        # 表格法存的文件不能被线性版误读
+        tabular = QLearningAgent(path, seed=0)
+        tabular.save()
+        self.assertEqual(LinearQAgent(path).load().updates, 0)
 
 
 class LearningTests(unittest.TestCase):

@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from .agent import QLearningAgent
+from .linear import LinearQAgent
 from .ledger import Ledger
 from .tasks import assert_disjoint, baseline_score, eval_seeds, evaluate, train, train_seeds
 
@@ -31,12 +32,14 @@ def cycle(
     eval_count: int = 20,
     epsilon: float = 0.25,
     hazards: int = 4,
+    algo: str = "tabular",
 ) -> Dict[str, Any]:
     if rounds <= 0 or episodes_per_round <= 0 or steps <= 0 or eval_count <= 0:
         raise ValueError("rounds / episodes_per_round / steps / eval_count 都必须是正整数")
 
     assert_disjoint()
-    agent = QLearningAgent(policy_path).load()
+    make_agent = LinearQAgent if algo == "linear" else QLearningAgent
+    agent = make_agent(policy_path).load()
     evaluation = eval_seeds(eval_count)
 
     before = evaluate(agent, evaluation, steps, hazards=hazards)
@@ -51,7 +54,7 @@ def cycle(
         agent.save()
     else:
         # 回滚：重新从磁盘读旧参数，丢掉本轮训练结果
-        agent = QLearningAgent(policy_path).load()
+        agent = make_agent(policy_path).load()
 
     delta = round(after["mean_return"] - before["mean_return"], 4)
     record = ledger.append(
@@ -67,6 +70,8 @@ def cycle(
             "updates": train_stats[-1].get("episodes", 0) if train_stats else 0,
             "states": len(agent.table),
             "hazards": hazards,
+        "algo": algo,
+            "algo": algo,
         },
         ts,
     )
@@ -79,6 +84,7 @@ def cycle(
         "states": len(agent.table),
         "record_seq": record["seq"],
         "hazards": hazards,
+        "algo": algo,
     }
 
 

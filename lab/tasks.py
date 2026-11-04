@@ -55,16 +55,17 @@ def run_episode(
     train: bool,
     epsilon: float = 0.0,
     hazards: int = 4,
+    with_walls: bool = False,
 ) -> Dict[str, Any]:
     environment = GridWorld(seed, hazards=hazards)
-    state = state_of(environment)
+    state = state_of(environment, with_walls=with_walls)
     total_reward = 0.0
     ate = hurt = 0
     for _ in range(steps):
         action = agent.act(state, epsilon=epsilon) if train else agent.best_action(state)
         previous_distance = _distance_to_food(environment)
         outcome = environment.step(action)
-        following = state_of(environment)
+        following = state_of(environment, with_walls=with_walls)
         reward = reward_of(previous_distance, environment, outcome)
         total_reward += reward
         ate += 1 if outcome.get("ate") else 0
@@ -89,8 +90,9 @@ def train(
     steps: int,
     epsilon: float = 0.3,
     hazards: int = 4,
+    with_walls: bool = False,
 ) -> Dict[str, Any]:
-    results = [run_episode(agent, seed, steps, train=True, epsilon=epsilon, hazards=hazards) for seed in seeds]
+    results = [run_episode(agent, seed, steps, train=True, epsilon=epsilon, hazards=hazards, with_walls=with_walls) for seed in seeds]
     return {
         "episodes": len(results),
         "mean_return": round(sum(item["return"] for item in results) / len(results), 4),
@@ -99,9 +101,9 @@ def train(
     }
 
 
-def evaluate(agent: QLearningAgent, seeds: Sequence[int], steps: int, hazards: int = 4) -> Dict[str, Any]:
+def evaluate(agent: QLearningAgent, seeds: Sequence[int], steps: int, hazards: int = 4, with_walls: bool = False) -> Dict[str, Any]:
     """固定 seed、固定步数、**不学习**。这是唯一被允许用来宣称"变强了"的分数。"""
-    results = [run_episode(agent, seed, steps, train=False, hazards=hazards) for seed in seeds]
+    results = [run_episode(agent, seed, steps, train=False, hazards=hazards, with_walls=with_walls) for seed in seeds]
     return {
         "episodes": len(results),
         "mean_return": round(sum(item["return"] for item in results) / len(results), 4),

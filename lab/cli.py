@@ -613,9 +613,11 @@ def cmd_review(args: argparse.Namespace, ctx: Context) -> int:
 
 def cmd_train(args: argparse.Namespace, ctx: Context) -> int:
     from .agent import QLearningAgent
+    from .linear import LinearQAgent
     from .tasks import train as do_train, train_seeds
 
-    agent = QLearningAgent(ctx.state_dir / "policy.json").load()
+    make_agent = LinearQAgent if args.algo == "linear" else QLearningAgent
+    agent = make_agent(ctx.state_dir / "policy.json").load()
     stats = do_train(agent, train_seeds(args.episodes), args.steps, epsilon=args.epsilon)
     agent.save()
     ctx.ledger.append("train", {**stats, "states": len(agent.table)}, ctx.clock.now_iso())
@@ -627,13 +629,15 @@ def cmd_train(args: argparse.Namespace, ctx: Context) -> int:
 
 def cmd_eval(args: argparse.Namespace, ctx: Context) -> int:
     from .agent import QLearningAgent
+    from .linear import LinearQAgent
     from .tasks import baseline_score, eval_seeds, evaluate
 
-    agent = QLearningAgent(ctx.state_dir / "policy.json").load()
+    make_agent = LinearQAgent if args.algo == "linear" else QLearningAgent
+    agent = make_agent(ctx.state_dir / "policy.json").load()
     seeds = eval_seeds(args.count)
     learned = evaluate(agent, seeds, args.steps)
     baseline = baseline_score(seeds, args.steps)
-    _emit(f"留出集（seed {seeds[0]}–{seeds[-1]}，{args.steps} 步 × {args.count} 个）：")
+    _emit(f"算法：{args.algo}　留出集（seed {seeds[0]}–{seeds[-1]}，{args.steps} 步 × {args.count} 个）：")
     _emit(f"  学到的策略 {learned['mean_return']:+.3f}（吃到 {learned['ate']}，受伤 {learned['hurt']}）")
     _emit(f"  BFS 基线   {baseline['mean_return']:+.3f}（吃到 {baseline['ate']}，受伤 {baseline['hurt']}）")
     _emit(f"  差值 {learned['mean_return'] - baseline['mean_return']:+.3f}")
@@ -668,6 +672,7 @@ def cmd_loop(args: argparse.Namespace, ctx: Context) -> int:
             steps=args.steps,
             eval_count=args.eval_count,
             hazards=hazards,
+            algo=args.algo,
         )
         _emit(f"—— 第 {index}/{args.cycles} 轮 ——")
         _emit(format_cycle(result))
@@ -952,12 +957,14 @@ def build_parser() -> argparse.ArgumentParser:
     p_train = sub.add_parser("train", help="训练可学策略（写 state/policy.json）")
     p_train.add_argument("--episodes", type=int, default=40)
     p_train.add_argument("--steps", type=int, default=60)
+    p_train.add_argument("--algo", choices=["tabular", "linear"], default="tabular")
     p_train.add_argument("--epsilon", type=float, default=0.25)
     p_train.set_defaults(func=cmd_train)
 
     p_eval = sub.add_parser("eval", help="在留出集上评测（唯一允许宣称变强的分数）")
     p_eval.add_argument("--count", type=int, default=20)
     p_eval.add_argument("--steps", type=int, default=60)
+    p_eval.add_argument("--algo", choices=["tabular", "linear"], default="tabular")
     p_eval.set_defaults(func=cmd_eval)
 
     p_loop = sub.add_parser("loop", help="自驱循环：评测→训练→再评测→变差就回滚")
@@ -965,6 +972,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_loop.add_argument("--rounds", type=int, default=3)
     p_loop.add_argument("--episodes", type=int, default=30)
     p_loop.add_argument("--steps", type=int, default=60)
+    p_loop.add_argument("--algo", choices=["tabular", "linear"], default="tabular")
     p_loop.add_argument("--eval-count", type=int, default=20)
     p_loop.add_argument("--no-curriculum", action="store_true", help="固定难度，不自动加难")
     p_loop.set_defaults(func=cmd_loop)
