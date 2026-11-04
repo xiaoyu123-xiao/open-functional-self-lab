@@ -2,10 +2,6 @@
 
 > [中文](README.md) | [English](README.en.md)
 
-# Open Functional Self Lab
-
-> [中文](README.md) | [English](README.en.md)
-
 **这个仓库是什么**：一份**零依赖的可复现实验模板** + 一份**诚实的失败档案** + 一条**被验证过的小结论**。
 
 **它不是什么**：不是自我进化系统，不是安全 RL 框架，不是通用 agent 库。**技术上也不新颖**——
