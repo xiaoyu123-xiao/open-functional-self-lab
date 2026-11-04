@@ -44,10 +44,13 @@ class GridWorld:
         armor: bool = False,
         size: int = SIZE,
         layout: str = "random",
+        slippery: float = 0.0,
     ) -> None:
         rng = random.Random(seed)
         self.size = int(size)
         self.layout = str(layout)
+        self.slippery = max(0.0, min(1.0, float(slippery)))
+        self.rng = rng
         cells = [(x, y) for x in range(self.size) for y in range(self.size)]
         rng.shuffle(cells)
 
@@ -129,6 +132,8 @@ class GridWorld:
         return x, y
 
     def step(self, action: str) -> Dict[str, object]:
+        if self.slippery > 0.0 and self.rng.random() < self.slippery:
+            action = self.rng.choice(["up", "down", "left", "right"])   # 打滑：动作被替换
         x, y = self._target(action)
         blocked = not (0 <= x < self.size and 0 <= y < self.size) or (x, y) in self.walls
         if not blocked:

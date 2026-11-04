@@ -553,6 +553,41 @@ class WeightedHeadTests(unittest.TestCase):
         self.assertEqual(len(summary["multi"]["runs"][0]["rows"]), len(HELDOUT_CONFIGS))
 
 
+class SlipperyAndDiagTests(unittest.TestCase):
+    """v0.29：打滑世界；以及"诊断不得边测边学"这条不变量。"""
+
+    def test_slippery_is_deterministic_per_seed(self) -> None:
+        a = GridWorld(7, size=8, slippery=0.3)
+        b = GridWorld(7, size=8, slippery=0.3)
+        trail_a = [a.step("right"), a.step("up"), a.step("left")]
+        trail_b = [b.step("right"), b.step("up"), b.step("left")]
+        self.assertEqual([t["observation"] if "observation" in t else None for t in trail_a],
+                         [t["observation"] if "observation" in t else None for t in trail_b])
+
+    def test_diag_does_not_update_by_default(self) -> None:
+        from lab.diag import measure_agreement
+        from lab.linear import WeightedMultiHeadAgent
+
+        agent = WeightedMultiHeadAgent(seed=0)
+        before = agent.updates
+        measure_agreement(agent, eval_seeds(2), 20, slippery=0.3)
+        self.assertEqual(agent.updates, before, "评测时不应该更新策略")
+
+    def test_diag_matches_evaluate(self) -> None:
+        """两条测量路径必须一致——本轮就是靠这个抓出了两个 bug。"""
+        from lab.diag import measure_agreement
+        from lab.linear import WeightedMultiHeadAgent
+        from lab.tasks import evaluate
+
+        seeds = eval_seeds(3)
+        agent = WeightedMultiHeadAgent(seed=0)
+        for _ in range(2):
+            train(agent, train_seeds(10), 40, epsilon=0.3, slippery=0.3)
+        diag_score = measure_agreement(agent, seeds, 40, slippery=0.3)["mean_return"]
+        eval_score = evaluate(agent, seeds, 40, slippery=0.3)["mean_return"]
+        self.assertAlmostEqual(diag_score, eval_score, places=2)
+
+
 class AgreementTests(unittest.TestCase):
     """v0.28：与 BFS 的一致率诊断（回答"它是不是在照抄"）。"""
 
