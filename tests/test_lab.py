@@ -553,6 +553,34 @@ class WeightedHeadTests(unittest.TestCase):
         self.assertEqual(len(summary["multi"]["runs"][0]["rows"]), len(HELDOUT_CONFIGS))
 
 
+class FrontierTests(unittest.TestCase):
+    """v0.47：预算前沿——按受伤预算选最优策略。"""
+
+    def test_frontier_returns_points_and_picks(self) -> None:
+        from lab.frontier import CANDIDATES, run
+
+        result = run([0.0, 5.0], repeats=1)
+        self.assertEqual(len(result["points"]), len(CANDIDATES))
+        self.assertEqual(len(result["picks"]), 2)
+        for point in result["points"]:
+            self.assertIn("ate", point)
+            self.assertIn("hurt", point)
+
+    def test_zero_budget_picks_zero_damage_candidate(self) -> None:
+        from lab.frontier import run
+
+        result = run([0.0], repeats=1)
+        pick = result["picks"][0]
+        self.assertIsNotNone(pick["ate"], "零预算下必须存在可行策略")
+        self.assertLessEqual(pick["hurt"], 0.0)
+
+    def test_infeasible_budget_is_reported(self) -> None:
+        from lab.frontier import run
+
+        result = run([-1.0], repeats=1)
+        self.assertIsNone(result["picks"][0]["ate"])
+
+
 class FactMemoryTests(unittest.TestCase):
     """v0.44：事实层——结论必须引用已核实事实。"""
 

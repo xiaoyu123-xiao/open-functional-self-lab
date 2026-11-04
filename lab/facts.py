@@ -50,6 +50,8 @@ FACTS: Sequence[Fact] = (
          "corridor，starve_ends=True", "CHANGELOG v0.43.0", "v0.43"),
     Fact("F9", "神经策略'更差'是预算受限的结论，不是原理性否定", "−0.69 vs +0.60（120 回合/配置）",
          "v0.24 的测试条件", "docs/experiments/0012-neural-policy.md", "v0.24"),
+    Fact("F15", "lab frontier 可按预算自动选策略", "预算0→规划器+护栏(2.17/0)；预算≥5→BFS(5.00/2.50)",
+         "ref-1，6 seed，repeats=6", "python -m lab.cli frontier --budgets 0,5,10,15", "v0.47"),
     Fact("F13", "下一跳方向特征曾上下颠倒（v0.27–v0.45），已修", "修复后规划器行为与 BFS 一致（30/15）",
          "全任务族", "docs/experiments/0030-combined-frontier.md", "v0.46"),
     Fact("F14", "最优策略取决于受伤预算", "预算≤15 → BFS(30/15)；预算=0 → 安全规划(13/0)",

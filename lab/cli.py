@@ -34,6 +34,7 @@ from .core import evaluate_policy, load_object, run_generic_episode
 from .lessons import ExperimentReport, check_experiment, summary as lessons_summary
 from .benchmark import format_report as format_reference, run_reference
 from .facts import check_citations, format_facts
+from .frontier import format_report as format_frontier, run as run_frontier
 from .collab import build_proposals, emergent_gap, record_choice
 from .knowledge import KnowledgeBase
 from .perm import Permissions
@@ -642,6 +643,18 @@ def cmd_ref(args: argparse.Namespace, ctx: Context) -> int:
          "ate": result["ate"], "hurt": result["hurt"], "explore": bool(args.explore)},
         ctx.clock.now_iso(),
     )
+    return EXIT_OK
+
+
+# ---------------------------------------------------------------- frontier
+
+
+def cmd_frontier(args: argparse.Namespace, ctx: Context) -> int:
+    budgets = [float(x) for x in args.budgets.split(",") if x.strip()]
+    result = run_frontier(budgets, repeats=args.repeats)
+    _emit(format_frontier(result))
+    ctx.ledger.append("frontier", {"budgets": budgets, "picks": result["picks"], "points": result["points"]},
+                      ctx.clock.now_iso())
     return EXIT_OK
 
 
@@ -1416,6 +1429,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_ref.add_argument("--repeats", type=int, default=12)
     p_ref.add_argument("--explore", action="store_true", help="探路模式（结果不得当结论）")
     p_ref.set_defaults(func=cmd_ref)
+
+    p_frontier = sub.add_parser("frontier", help="预算前沿：在受伤预算内选最优策略")
+    p_frontier.add_argument("--budgets", default="0,5,10,15", help="逗号分隔的受伤预算")
+    p_frontier.add_argument("--repeats", type=int, default=6, help="学习器重复组数")
+    p_frontier.set_defaults(func=cmd_frontier)
 
     p_facts = sub.add_parser("facts", help="已知事实库：下结论前必须引用")
     p_facts.add_argument("--brief", action="store_true", help="只看关键几条（上下文丢了先跑这个）")
