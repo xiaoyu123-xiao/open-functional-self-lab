@@ -88,6 +88,8 @@ They constrain **how** work happens, not **what** you can build.
 | [AGENT-RUNBOOK.en.md](AGENT-RUNBOOK.en.md) | if you are an AI agent executing this repo |
 | [docs/MASTER.md](docs/MASTER.md) | full picture (Chinese) |
 | [docs/experiments/](docs/experiments/) | 8 experiment records, 4 of them failures |
+| [examples/](examples/README.md) | three runnable integrations (eval harness / model wrapper / budgeted fetch) |
+| [docs/security-audit.md](docs/security-audit.md) | what it can and cannot touch on your machine |
 
 ## Status
 

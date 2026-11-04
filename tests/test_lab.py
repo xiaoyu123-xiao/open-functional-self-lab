@@ -413,6 +413,31 @@ class LethalTaskTests(unittest.TestCase):
         self.assertLessEqual(result["steps"], 60)
 
 
+class ExampleTests(unittest.TestCase):
+    """v0.20：三个接入示例必须能直接跑（它们是"给别人看的证据"）。"""
+
+    def test_eval_harness_example(self) -> None:
+        from examples.eval_harness import demo
+
+        result = demo()
+        self.assertIn("threshold", result)
+        self.assertGreaterEqual(result["learned"], result["chance"])
+
+    def test_llm_wrapper_example_respects_budget(self) -> None:
+        from examples.llm_wrapper import demo
+
+        result = demo(cap=5.0, workdir=Path(tempfile.mkdtemp()))
+        self.assertLessEqual(result["calls"], 5)
+        self.assertIn(result["stopped"], {"跑满", "预算拦截"})
+
+    def test_budgeted_fetch_example(self) -> None:
+        from examples.budgeted_fetch import demo
+
+        result = demo(cap=2.0, workdir=Path(tempfile.mkdtemp()))
+        self.assertLessEqual(result["fetched"], 2)
+        self.assertEqual(result["fetched"] + result["skipped"], 3)
+
+
 class GenericCoreTests(unittest.TestCase):
     """v0.18：把任意环境/策略装进审计外壳（对用户最有用的部分）。"""
 

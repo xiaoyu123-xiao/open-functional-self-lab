@@ -20,6 +20,8 @@ import importlib
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Protocol, Sequence, runtime_checkable
 
+from .budget import BudgetExceeded
+
 
 @runtime_checkable
 class Env(Protocol):
@@ -95,6 +97,8 @@ def run_generic_episode(
         try:
             action = policy.act(observation)
             outcome = env.step(action)
+        except BudgetExceeded:
+            raise                                    # 预算拦截要原样抛出，调用方才能识别
         except Exception as error:                  # 用户代码出错时不能把账本写坏
             ledger.append(
                 "alert",
