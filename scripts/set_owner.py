@@ -42,6 +42,8 @@ def rewrite_text(text: str, owner: str) -> str:
     # 先处理团队写法：@your-org/maintainers -> @owner
     text = re.sub(r"@your-org/[A-Za-z0-9_.-]+", f"@{owner}", text)
     text = text.replace("<your-org>", owner).replace("your-org", owner)
+    # 同一行里 "@owner @owner"（maintainers 与 founder 都指向个人时）去重
+    text = re.sub(r"(@[A-Za-z0-9_.-]+)(?:\s+\1)+", r"\1", text)
     return text
 
 
@@ -61,7 +63,15 @@ def patch_files(owner: str) -> list[tuple[str, int]]:
 
 
 def git(*args: str) -> subprocess.CompletedProcess:
-    return subprocess.run(["git", *args], cwd=str(ROOT), capture_output=True, text=True, encoding="utf-8")
+    # errors="replace"：Windows 上 git 的本地化输出不一定是 UTF-8，不能因为解码失败就崩
+    return subprocess.run(
+        ["git", *args],
+        cwd=str(ROOT),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
 
 
 def main(argv: "list[str] | None" = None) -> int:
@@ -87,15 +97,17 @@ def main(argv: "list[str] | None" = None) -> int:
             print("[OK] 无需替换（已经是目标值）")
 
     if args.name and args.email:
-        result = git("commit", "--amend", "--no-edit", "--author", f"{args.name} <{args.email}>")
+        # 先设 config，再 --reset-author：这样 author 和 committer 一起改成真人
+        git("config", "user.name", args.name)
+        git("config", "user.email", args.email)
+        result = git("commit", "--amend", "--no-edit", "--reset-author")
         if result.returncode != 0:
             print(f"[FAIL] 改作者失败：{(result.stderr or result.stdout).strip()[:300]}")
             return 1
-        git("config", "user.name", args.name)
-        git("config", "user.email", args.email)
-        print(f"[OK] 最近一次 commit 作者 → {args.name} <{args.email}>")
+        shown = git("log", "-1", "--pretty=%an <%ae> / committer %cn <%ce>").stdout.strip()
+        print(f"[OK] 最近一次 commit → {shown}")
         print("     注意：amend 会改 commit 哈希，需重新打 tag：")
-        print("     git tag -d v0.1.0 && git tag -a v0.1.0 -m \"v0.1.0 控制面 MVP\"")
+        print('     git tag -d v0.1.0 && git tag -a v0.1.0 -m "v0.1.0 控制面 MVP"')
 
     if args.remote_url:
         existing = git("remote").stdout.strip().splitlines()
