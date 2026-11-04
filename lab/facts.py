@@ -50,6 +50,10 @@ FACTS: Sequence[Fact] = (
          "corridor，starve_ends=True", "CHANGELOG v0.43.0", "v0.43"),
     Fact("F9", "神经策略'更差'是预算受限的结论，不是原理性否定", "−0.69 vs +0.60（120 回合/配置）",
          "v0.24 的测试条件", "docs/experiments/0012-neural-policy.md", "v0.24"),
+    Fact("F11", "严格约束（吃≥4/5 且伤≤1/回合）对所有方法都不成立", "学习器 0/20；BFS 伤 15 > 6",
+         "ref-1，20 组", "docs/experiments/0029-pareto-front.md", "v0.45"),
+    Fact("F12", "学习器与 BFS 互不支配，各占 Pareto 一端", "学习器 11.4/5.6（吃/伤） vs BFS 30/15",
+         "ref-1，20 组", "docs/experiments/0029-pareto-front.md", "v0.45"),
     Fact("F10", "ref-1 上唯一有 headroom 的轴是受伤次数", "BFS 2.5/回合 vs 学习器 1.0/回合",
          "ref-1", "CHANGELOG v0.43.0", "v0.43"),
 )
