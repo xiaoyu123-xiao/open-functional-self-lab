@@ -34,6 +34,7 @@ def cycle(
     hazards: int = 4,
     algo: str = "tabular",
     lethal: bool = False,
+    armor: bool = False,
 ) -> Dict[str, Any]:
     if rounds <= 0 or episodes_per_round <= 0 or steps <= 0 or eval_count <= 0:
         raise ValueError("rounds / episodes_per_round / steps / eval_count 都必须是正整数")
@@ -43,12 +44,12 @@ def cycle(
     agent = make_agent(policy_path).load()
     evaluation = eval_seeds(eval_count)
 
-    before = evaluate(agent, evaluation, steps, hazards=hazards, lethal=lethal)
+    before = evaluate(agent, evaluation, steps, hazards=hazards, lethal=lethal, armor=armor)
     train_stats: List[Dict[str, Any]] = []
     for _ in range(rounds):
-        train_stats.append(train(agent, train_seeds(episodes_per_round), steps, epsilon=epsilon, hazards=hazards, lethal=lethal))
-    after = evaluate(agent, evaluation, steps, hazards=hazards, lethal=lethal)
-    baseline = baseline_score(evaluation, steps, hazards=hazards, lethal=lethal)
+        train_stats.append(train(agent, train_seeds(episodes_per_round), steps, epsilon=epsilon, hazards=hazards, lethal=lethal, armor=armor))
+    after = evaluate(agent, evaluation, steps, hazards=hazards, lethal=lethal, armor=armor)
+    baseline = baseline_score(evaluation, steps, hazards=hazards, lethal=lethal, armor=armor)
 
     improved = after["mean_return"] > before["mean_return"]
     if improved:
@@ -73,9 +74,13 @@ def cycle(
             "hazards": hazards,
         "algo": algo,
         "lethal": lethal,
+        "armor": armor,
             "algo": algo,
         "lethal": lethal,
+        "armor": armor,
             "lethal": lethal,
+        "armor": armor,
+            "armor": armor,
         },
         ts,
     )
@@ -90,6 +95,7 @@ def cycle(
         "hazards": hazards,
         "algo": algo,
         "lethal": lethal,
+        "armor": armor,
     }
 
 

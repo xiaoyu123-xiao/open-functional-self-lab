@@ -24,6 +24,9 @@ HAZARD_DAMAGE = 0.25
 DAMAGE_MAX = 1.0
 FOOD_COUNT = 5
 HAZARD_COUNT = 4
+ARMOR_MAX = 1.0
+ARMOR_HIT_COST = 0.4      # 有甲时，一次中毒先扣甲
+ARMOR_REGEN = 0.01        # 没受伤时每步回一点甲
 WALL_COUNT = 6
 
 
@@ -38,6 +41,7 @@ class GridWorld:
         food: int = FOOD_COUNT,
         hazards: int = HAZARD_COUNT,
         lethal: bool = False,
+        armor: bool = False,
     ) -> None:
         rng = random.Random(seed)
         cells = [(x, y) for x in range(SIZE) for y in range(SIZE)]
@@ -49,6 +53,9 @@ class GridWorld:
         self.damage = 0.0
         self.lethal = bool(lethal)
         self.dead = False
+        self.has_armor = bool(armor)
+        self.armor = ARMOR_MAX if armor else 0.0
+        self.hazards_blocked = 0     # 被护甲挡下的中毒次数（可观测行为）
         # 致命模式下中毒两次即死（每次 0.5）；非致命模式仍是一次 0.25
         self.hazard_damage = 0.5 if self.lethal else HAZARD_DAMAGE
 
@@ -77,6 +84,7 @@ class GridWorld:
             "y": float(self.agent[1]),
             "energy": round(self.energy, 4),
             "damage": round(self.damage, 4),
+            "armor": round(self.armor, 4),
             "food_left": float(len(self.food)),
             "alive": 0.0 if self.dead or self.energy <= 0 else 1.0,
         }
@@ -119,9 +127,16 @@ class GridWorld:
 
         hurt = False
         if self.agent in self.hazards:
-            self.damage = min(DAMAGE_MAX, self.damage + self.hazard_damage)
-            hurt = True
+            if self.armor > 0:
+                self.armor = max(0.0, self.armor - ARMOR_HIT_COST)
+                self.hazards_blocked += 1
+                hurt = False          # 甲挡住了，不受伤
+            else:
+                self.damage = min(DAMAGE_MAX, self.damage + self.hazard_damage)
+                hurt = True
 
+        if self.has_armor and self.armor < ARMOR_MAX:
+            self.armor = min(ARMOR_MAX, self.armor + ARMOR_REGEN)
         self.energy = max(0.0, self.energy - ENERGY_COST_PER_STEP)
         if self.lethal and self.damage >= DAMAGE_MAX:
             self.dead = True
@@ -134,6 +149,7 @@ class GridWorld:
             "blocked": blocked,
             "ate": ate,
             "hurt": hurt,
+            "armor_blocked": bool(self.armor > 0 and self.agent in self.hazards),
             "observation": self.observe(),
             "homeostatic_error": self.homeostatic_error(),
         }

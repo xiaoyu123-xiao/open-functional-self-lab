@@ -29,6 +29,8 @@ from .clock import Clock, FakeClock, parse_iso, to_iso
 from .ledger import Ledger
 from .notify import DEDUPE_HOURS, LEVELS, Notifier
 from .predict import benchmark as run_benchmark
+from .collab import analyse as analyse_behaviour
+from .collab import build_proposals, emergent_gap, record_choice
 from .knowledge import KnowledgeBase
 from .loop import cycle as run_cycle, format_cycle
 from .selfmodel import SelfModel
@@ -608,6 +610,100 @@ def cmd_review(args: argparse.Namespace, ctx: Context) -> int:
     return EXIT_OK
 
 
+# ---------------------------------------------------------------- collaborate / emergent
+
+
+def _current_scores(ctx: Context) -> "tuple[bool, float | None, float | None]":
+    from .agent import QLearningAgent
+    from .tasks import baseline_score, eval_seeds, evaluate
+
+    policy = ctx.state_dir / "policy.json"
+    if not policy.exists():
+        return False, None, None
+    agent = QLearningAgent(policy).load()
+    seeds = eval_seeds(10)
+    return True, evaluate(agent, seeds, 60, lethal=True)["mean_return"], baseline_score(seeds, 60, lethal=True)["mean_return"]
+
+
+def cmd_collaborate(args: argparse.Namespace, ctx: Context) -> int:
+    """它提方案、你拍板。选完执行，并记住你的偏好。"""
+    has_policy, learned, baseline = _current_scores(ctx)
+    knowledge_count = len(ctx.knowledge().current())
+    pending = len(ctx.notifier(echo=False).pending())
+
+    model = ctx.self_model()
+    preferences = model.load().get("preferences", {}) if model.exists() else {}
+    proposals = build_proposals(
+        has_policy=has_policy,
+        learned_score=learned,
+        baseline_score=baseline,
+        knowledge_count=knowledge_count,
+        pending_alerts=pending,
+        preferences=preferences,
+    )
+
+    _emit(f"现状：策略{'有' if has_policy else '没有'}　留出分数 {learned if learned is None else round(learned,3)}"
+          f"　BFS 基线 {None if baseline is None else round(baseline,3)}　知识 {knowledge_count} 条　待回应告警 {pending} 条")
+    _emit("")
+    _emit("它建议按这个顺序做（选一个，或 -h 看参数）：")
+    for index, item in enumerate(proposals, start=1):
+        _emit(f"  {index}. [{item['id']}] {item['title']}　—— {item['reason']}（{item['cost']}）")
+    _emit("")
+
+    if not args.choose:
+        _emit("用 `python -m lab.cli collaborate --choose 1` 选定；选定后我会执行并把你的偏好记下来。")
+        return EXIT_OK
+
+    if not 1 <= args.choose <= len(proposals):
+        _emit(f"--choose 只能是 1..{len(proposals)}")
+        return EXIT_USAGE
+
+    chosen = proposals[args.choose - 1]
+    record_choice(ctx.ledger, ctx.clock.now_iso(), proposals, chosen["id"])
+    if model.exists():
+        data = model.load()
+        prefs = data.setdefault("preferences", {})
+        prefs[chosen["id"]] = int(prefs.get(chosen["id"], 0)) + 1
+        model.save(data)
+
+    _emit(f"你选了：{chosen['title']}（已记进账本，下次会优先排它）")
+    mapping = {
+        "train": ["loop", "--cycles", "3", "--lethal"],
+        "curriculum": ["loop", "--cycles", "3", "--hazards", "6", "--lethal"],
+        "armor": ["loop", "--cycles", "3", "--lethal", "--armor"],
+        "learn": ["learn"],
+        "eval": ["eval", "--lethal"],
+        "ack": ["inbox"],
+    }
+    _emit("执行建议：python -m lab.cli " + " ".join(mapping.get(chosen["id"], ["status"])))
+    return EXIT_OK
+
+
+def cmd_emergent(args: argparse.Namespace, ctx: Context) -> int:
+    """行为特征 + 与训练前的差值：本项目的"涌现代理指标"。"""
+    steps = [record["payload"] for record in ctx.ledger.events("step")]
+    if not steps:
+        _emit("还没有 step 记录。先跑一轮：python -m lab.cli run --steps 40")
+        return EXIT_OK
+    half = max(1, len(steps) // 2)
+    before = analyse_behaviour(steps[:half])
+    after = analyse_behaviour(steps[half:])
+    _emit("行为特征（前一半记录 → 后一半记录）：")
+    for key in ("wall_bump_rate", "hazard_entry_rate", "rest_ratio", "food_camp_ratio", "action_entropy"):
+        _emit(f"  {key:<20} {before[key]:>8.3f} → {after[key]:>8.3f}")
+    notes = emergent_gap(before, after)
+    _emit("")
+    if notes:
+        _emit("变化显著（这是本项目对'涌现'的操作性定义：没人奖励过、但行为变了）：")
+        for note in notes:
+            _emit(f"  - {note}")
+    else:
+        _emit("没有显著变化。别硬说涌现——没有变化就是没有变化。")
+    _emit("")
+    _emit("注意：这些数字只能说明行为分布变了，不能说明'有意识'。")
+    return EXIT_OK
+
+
 # ---------------------------------------------------------------- train / eval / loop
 
 
@@ -618,7 +714,7 @@ def cmd_train(args: argparse.Namespace, ctx: Context) -> int:
 
     make_agent = LinearQAgent if args.algo == "linear" else QLearningAgent
     agent = make_agent(ctx.state_dir / "policy.json").load()
-    stats = do_train(agent, train_seeds(args.episodes), args.steps, epsilon=args.epsilon, lethal=args.lethal)
+    stats = do_train(agent, train_seeds(args.episodes), args.steps, epsilon=args.epsilon, lethal=args.lethal, armor=args.armor, hazards=args.hazards)
     agent.save()
     ctx.ledger.append("train", {**stats, "states": len(agent.table)}, ctx.clock.now_iso())
     _emit(f"训练 {stats['episodes']} 个回合：训练集均分 {stats['mean_return']:+.3f}，"
@@ -635,8 +731,8 @@ def cmd_eval(args: argparse.Namespace, ctx: Context) -> int:
     make_agent = LinearQAgent if args.algo == "linear" else QLearningAgent
     agent = make_agent(ctx.state_dir / "policy.json").load()
     seeds = eval_seeds(args.count)
-    learned = evaluate(agent, seeds, args.steps, lethal=args.lethal)
-    baseline = baseline_score(seeds, args.steps, lethal=args.lethal)
+    learned = evaluate(agent, seeds, args.steps, lethal=args.lethal, armor=args.armor, hazards=args.hazards)
+    baseline = baseline_score(seeds, args.steps, lethal=args.lethal, armor=args.armor, hazards=args.hazards)
     _emit(f"算法：{args.algo}　留出集（seed {seeds[0]}–{seeds[-1]}，{args.steps} 步 × {args.count} 个）：")
     _emit(f"  学到的策略 {learned['mean_return']:+.3f}（吃到 {learned['ate']}，受伤 {learned['hurt']}）")
     _emit(f"  BFS 基线   {baseline['mean_return']:+.3f}（吃到 {baseline['ate']}，受伤 {baseline['hurt']}）")
@@ -655,7 +751,7 @@ def cmd_loop(args: argparse.Namespace, ctx: Context) -> int:
     if not ctx.store.exists():
         cmd_init(argparse.Namespace(json=False, by=False), ctx)
 
-    hazards = 4
+    hazards = max(1, min(12, args.hazards))
     knowledge = ctx.knowledge()
     if any("hazard" in entry.get("tags", []) for entry in knowledge.current()):
         hazards = 5
@@ -674,6 +770,7 @@ def cmd_loop(args: argparse.Namespace, ctx: Context) -> int:
             hazards=hazards,
             algo=args.algo,
             lethal=args.lethal,
+            armor=args.armor,
         )
         _emit(f"—— 第 {index}/{args.cycles} 轮 ——")
         _emit(format_cycle(result))
@@ -955,11 +1052,20 @@ def build_parser() -> argparse.ArgumentParser:
     p_bench.add_argument("--seeds", type=int, default=3, help="用几个 seed（1..N）")
     p_bench.set_defaults(func=cmd_bench)
 
+    p_collab = sub.add_parser("collaborate", help="它提方案、你拍板（会记住你的偏好）")
+    p_collab.add_argument("--choose", type=int, default=None, help="选第几个方案")
+    p_collab.set_defaults(func=cmd_collaborate)
+
+    p_emergent = sub.add_parser("emergent", help="行为特征对比（涌现代理指标）")
+    p_emergent.set_defaults(func=cmd_emergent)
+
     p_train = sub.add_parser("train", help="训练可学策略（写 state/policy.json）")
     p_train.add_argument("--episodes", type=int, default=40)
     p_train.add_argument("--steps", type=int, default=60)
     p_train.add_argument("--algo", choices=["tabular", "linear"], default="tabular")
     p_train.add_argument("--lethal", action="store_true", help="危险区致命（中毒两次即死）")
+    p_train.add_argument("--armor", action="store_true", help="开启护甲（先扣甲、不回血）")
+    p_train.add_argument("--hazards", type=int, default=4, help="危险区数量（难度）")
     p_train.add_argument("--epsilon", type=float, default=0.25)
     p_train.set_defaults(func=cmd_train)
 
@@ -968,6 +1074,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_eval.add_argument("--steps", type=int, default=60)
     p_eval.add_argument("--algo", choices=["tabular", "linear"], default="tabular")
     p_eval.add_argument("--lethal", action="store_true", help="危险区致命（中毒两次即死）")
+    p_eval.add_argument("--armor", action="store_true", help="开启护甲（先扣甲、不回血）")
+    p_eval.add_argument("--hazards", type=int, default=4, help="危险区数量（难度）")
     p_eval.set_defaults(func=cmd_eval)
 
     p_loop = sub.add_parser("loop", help="自驱循环：评测→训练→再评测→变差就回滚")
@@ -977,6 +1085,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_loop.add_argument("--steps", type=int, default=60)
     p_loop.add_argument("--algo", choices=["tabular", "linear"], default="tabular")
     p_loop.add_argument("--lethal", action="store_true", help="危险区致命（中毒两次即死）")
+    p_loop.add_argument("--armor", action="store_true", help="开启护甲（先扣甲、不回血）")
+    p_loop.add_argument("--hazards", type=int, default=4, help="危险区数量（难度）")
     p_loop.add_argument("--eval-count", type=int, default=20)
     p_loop.add_argument("--no-curriculum", action="store_true", help="固定难度，不自动加难")
     p_loop.set_defaults(func=cmd_loop)

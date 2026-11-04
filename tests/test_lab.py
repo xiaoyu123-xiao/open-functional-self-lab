@@ -25,6 +25,7 @@ from lab.clock import Clock, FakeClock, elapsed_seconds, parse_iso, to_iso  # no
 from lab.env import GridWorld, greedy_action  # noqa: E402
 from lab.notify import Notifier  # noqa: E402
 from lab.selfmodel import SelfModel  # noqa: E402
+from lab.collab import analyse, build_proposals, emergent_gap  # noqa: E402
 from lab.knowledge import KnowledgeBase  # noqa: E402
 from lab.agent import QLearningAgent  # noqa: E402
 from lab.linear import STATE_DIM, STATE_DIM_WITH_WALLS, LinearQAgent, featurize  # noqa: E402
@@ -398,6 +399,47 @@ class LethalTaskTests(unittest.TestCase):
         result = run_episode(agent, 9001, 60, train=False, lethal=True)
         self.assertIn("dead", result)
         self.assertLessEqual(result["steps"], 60)
+
+
+class CollabTests(unittest.TestCase):
+    """v0.8：护甲 / 协作提案 / 涌现代理。"""
+
+    def test_armor_absorbs_hits(self) -> None:
+        env = GridWorld(5, lethal=True, armor=True)
+        env.agent = sorted(env.hazards)[0]
+        outcome = env.step("rest")
+        self.assertFalse(outcome["hurt"])
+        self.assertEqual(env.damage, 0.0)
+        self.assertLess(env.armor, 1.0)
+        self.assertEqual(env.hazards_blocked, 1)
+
+    def test_analyse_and_emergent_gap(self) -> None:
+        before = [{"action": "up", "x": 0, "y": 0, "blocked": False, "hurt": False}] * 8
+        after = [{"action": "rest", "x": 1, "y": 1, "blocked": False, "hurt": True}] * 8
+        stats_before = analyse(before)
+        stats_after = analyse(after)
+        self.assertIn("wall_bump_rate", stats_before)
+        self.assertGreater(stats_after["rest_ratio"], stats_before["rest_ratio"])
+        notes = emergent_gap(stats_before, stats_after)
+        self.assertTrue(notes, "行为分布变化超过阈值时应该有提示")
+
+    def test_proposals_put_alerts_first(self) -> None:
+        proposals = build_proposals(
+            has_policy=True,
+            learned_score=1.0,
+            baseline_score=0.7,
+            knowledge_count=3,
+            pending_alerts=2,
+        )
+        self.assertEqual(proposals[0]["id"], "ack")
+        self.assertEqual(len(proposals), 3)
+
+    def test_proposals_respect_preference_order(self) -> None:
+        common = dict(has_policy=True, learned_score=1.0, baseline_score=0.7, knowledge_count=3, pending_alerts=0)
+        default = build_proposals(**common)
+        preferred = build_proposals(preferences={"armor": 5}, **common)
+        self.assertEqual(preferred[0]["id"], "armor")
+        self.assertIn(default[0]["id"], {"train", "curriculum", "armor", "eval"})
 
 
 class LinearAgentTests(unittest.TestCase):

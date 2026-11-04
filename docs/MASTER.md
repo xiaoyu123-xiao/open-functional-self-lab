@@ -122,6 +122,7 @@ python -m lab.cli verify                            # 账本/状态机/知识库
 | `lab/linear.py` | 线性函数逼近 Q（`--algo linear`，可泛化但仍未超 BFS） | `train --algo linear` | ✅ |
 | `lab/tasks.py` | 训练/留出 seed 分离 + 课程 + BFS 对照 | `eval` | ✅ |
 | `lab/loop.py` | 自驱循环一轮：评测→训练→再评测→变差回滚 | `loop` | ✅ |
+| `lab/collab.py` | 协作提案 + 涌现代理指标 | `collaborate` / `emergent` | ✅ |
 | `lab/plugins/` | 插件接口（manifest + 红线 + 预算声明） | — | ⬜ 下一版 |
 | `lab/loop.py` | 自驱循环（不需逐条敲命令） | `loop` | ⬜ v0.3 下一步 |
 
@@ -143,6 +144,8 @@ python -m lab.cli verify                            # 账本/状态机/知识库
 | `train --episodes N --steps N` | 训练策略，写 `state/policy.json` |
 | `eval --count N --steps N` | 留出集评测 + 与 BFS 基线对比 |
 | `loop --cycles N` | 自驱循环：评测→训练→再评测→变差就回滚 |
+| `collaborate [--choose N]` | 它提 3 个方案，你拍板；选择会改变下次排序 |
+| `emergent` | 行为特征前后对比（可复算） |
 | `bench --steps N --seeds N` | 预测基线 |
 | `viz` / `report` | 仪表盘 / 周报 |
 | `verify` / `lint` / `status` | 校验 / 红线 / 状态 |
