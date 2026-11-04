@@ -553,6 +553,22 @@ class WeightedHeadTests(unittest.TestCase):
         self.assertEqual(len(summary["multi"]["runs"][0]["rows"]), len(HELDOUT_CONFIGS))
 
 
+class OneHitTests(unittest.TestCase):
+    """v0.35：碰危险区即死（把 agent 放到危险格上再 rest，避免依赖相邻格是否可行走）。"""
+
+    def test_one_hit_dies_on_first_hazard(self) -> None:
+        env = GridWorld(1, hazards=6, one_hit=True)
+        env.agent = next(iter(env.hazards))
+        env.step("rest")
+        self.assertTrue(env.dead)
+
+    def test_without_one_hit_survives_first_contact(self) -> None:
+        env = GridWorld(1, hazards=6, one_hit=False)
+        env.agent = next(iter(env.hazards))
+        env.step("rest")
+        self.assertFalse(env.dead)
+
+
 class HurtPenaltyTests(unittest.TestCase):
     """v0.34：受伤惩罚可调（默认仍是 -1，不改变旧结论）。"""
 

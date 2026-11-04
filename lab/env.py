@@ -46,6 +46,7 @@ class GridWorld:
         layout: str = "random",
         slippery: float = 0.0,
         hazard_drift: int = 0,
+        one_hit: bool = False,
     ) -> None:
         rng = random.Random(seed)
         self.size = int(size)
@@ -53,6 +54,7 @@ class GridWorld:
         self.slippery = max(0.0, min(1.0, float(slippery)))
         self.rng = rng
         self.hazard_drift = int(hazard_drift)
+        self.one_hit = bool(one_hit)
         self.steps_taken = 0
         cells = [(x, y) for x in range(self.size) for y in range(self.size)]
         rng.shuffle(cells)
@@ -178,7 +180,9 @@ class GridWorld:
         if self.has_armor and self.armor < ARMOR_MAX:
             self.armor = min(ARMOR_MAX, self.armor + ARMOR_REGEN)
         self.energy = max(0.0, self.energy - ENERGY_COST_PER_STEP)
-        if self.lethal and self.damage >= DAMAGE_MAX:
+        if self.one_hit and hurt:
+            self.dead = True          # v0.35：碰一下即结束
+        elif self.lethal and self.damage >= DAMAGE_MAX:
             self.dead = True
             self.energy = 0.0
         self.steps += 1
