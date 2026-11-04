@@ -692,6 +692,7 @@ def cmd_transfer(args: argparse.Namespace, ctx: Context) -> int:
         steps=args.steps,
         eval_count=args.eval_count,
         algo=args.algo,
+        repeats=args.repeats,
     )
     _emit(format_transfer(summary))
     ctx.ledger.append(
@@ -1253,6 +1254,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_transfer.add_argument("--steps", type=int, default=60)
     p_transfer.add_argument("--eval-count", type=int, default=20)
     p_transfer.add_argument("--algo", choices=["tabular", "linear", "multihead", "weighted"], default="tabular")
+    p_transfer.add_argument("--repeats", type=int, default=1, help="用几组不同的初始种子重复，默认 1")
     p_transfer.set_defaults(func=cmd_transfer)
 
     p_autonomy = sub.add_parser("autonomy", help="自主级别：locked / supervised / full（一次性给到位）")

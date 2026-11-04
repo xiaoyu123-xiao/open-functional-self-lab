@@ -416,20 +416,19 @@ class TransferTests(unittest.TestCase):
     """v0.12：跨任务迁移（当前结果是失败，但接口与判据必须固定）。"""
 
     def test_transfer_returns_expected_shape(self) -> None:
-        summary = run_transfer(rounds=1, episodes=6, steps=20, eval_count=3)
-        self.assertIn("single", summary)
-        self.assertIn("multi", summary)
-        self.assertIn("ratio", summary)
+        summary = run_transfer(rounds=1, episodes=6, steps=20, eval_count=3, repeats=2)
+        for key in ("single", "multi", "ratio", "diff_mean", "wins", "win_rate", "transfer_helped"):
+            self.assertIn(key, summary)
         self.assertIsInstance(summary["transfer_helped"], bool)
-        self.assertEqual(len(summary["multi"]["rows"]), len(HELDOUT_CONFIGS))
-        # 判据写死：≥1.05 才算迁移有帮助
-        if summary["ratio"] is not None:
-            self.assertEqual(summary["transfer_helped"], summary["ratio"] >= 1.05)
+        self.assertEqual(len(summary["multi"]["runs"][0]["rows"]), len(HELDOUT_CONFIGS))
+        # 判据 v2：胜率 ≥80% 且均值不下降
+        expected = summary["win_rate"] >= 0.8 and summary["multi"]["mean"] >= summary["single"]["mean"]
+        self.assertEqual(summary["transfer_helped"], expected)
 
     def test_transfer_supports_linear_algo(self) -> None:
         summary = run_transfer(rounds=1, episodes=5, steps=20, eval_count=3, algo="linear")
         self.assertEqual(summary["algo"], "linear")
-        self.assertEqual(len(summary["multi"]["rows"]), len(HELDOUT_CONFIGS))
+        self.assertEqual(len(summary["multi"]["runs"][0]["rows"]), len(HELDOUT_CONFIGS))
 
     def test_train_and_heldout_configs_are_disjoint(self) -> None:
         train_keys = {(c["hazards"], c["lethal"]) for c in TRAIN_CONFIGS}
@@ -453,7 +452,7 @@ class WeightedHeadTests(unittest.TestCase):
         summary = run_transfer(rounds=1, episodes=6, steps=20, eval_count=3, algo="weighted")
         self.assertEqual(summary["algo"], "weighted")
         self.assertIn("ratio", summary)
-        self.assertEqual(len(summary["multi"]["rows"]), len(HELDOUT_CONFIGS))
+        self.assertEqual(len(summary["multi"]["runs"][0]["rows"]), len(HELDOUT_CONFIGS))
 
 
 class MultiHeadTests(unittest.TestCase):
