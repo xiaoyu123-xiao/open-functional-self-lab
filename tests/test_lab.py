@@ -553,6 +553,40 @@ class WeightedHeadTests(unittest.TestCase):
         self.assertEqual(len(summary["multi"]["runs"][0]["rows"]), len(HELDOUT_CONFIGS))
 
 
+class NextStepFeatureTests(unittest.TestCase):
+    """v0.27：把"该往哪走"塞进特征。"""
+
+    def test_next_step_points_toward_reachable_food(self) -> None:
+        from lab.agent import _next_step
+
+        env = GridWorld(1, size=10, layout="corridor", hazards=6)
+        code = _next_step(env)
+        self.assertIn(code, {"n0", "n1", "n2", "n3", "n4"})
+
+    def test_state_contains_next_step_token(self) -> None:
+        from lab.agent import state_of
+
+        env = GridWorld(1, size=10, layout="corridor", hazards=6)
+        rich = state_of(env, with_path=True)
+        self.assertRegex(rich, r"\|n[0-4]")
+        self.assertEqual(len(featurize(rich)), STATE_DIM)
+
+    def test_feature_improves_corridor_score(self) -> None:
+        """有规划特征时，走廊上的得分必须高于没有时（本轮的核心结论）。"""
+        from lab.linear import WeightedMultiHeadAgent
+
+        seeds = eval_seeds(4)
+        scores = {}
+        for use_path in (False, True):
+            agent = WeightedMultiHeadAgent(seed=0)
+            for _ in range(2):
+                train(agent, train_seeds(12), 120, epsilon=0.3, size=10, layout="corridor",
+                      hazards=6, lethal=False, with_path=use_path)
+            scores[use_path] = evaluate(agent, seeds, 120, size=10, layout="corridor",
+                                        hazards=6, lethal=False, with_path=use_path)["mean_return"]
+        self.assertGreater(scores[True], scores[False])
+
+
 class PathFeatureTests(unittest.TestCase):
     """v0.25：绕行距离特征与稀疏走廊布局。"""
 

@@ -125,6 +125,39 @@ def _path_bucket(env: GridWorld) -> str:
     return "p15"
 
 
+def _next_step(env: GridWorld) -> str:
+    """沿最短路径（绕开墙）走向最近食物时，第一步该往哪走（v0.27）。
+
+    这是把"规划"塞进特征里：策略不需要自己推多步，只要跟这个方向。
+    """
+    from collections import deque
+
+    start = env.agent
+    if start in env.food:
+        return "n0"
+    order = [((0, -1), 1), ((0, 1), 2), ((-1, 0), 3), ((1, 0), 4)]   # 上/下/左/右
+    parent = {start: None}
+    first = {start: None}
+    frontier = deque([start])
+    while frontier:
+        current = frontier.popleft()
+        if current in env.food and current != start:
+            node = current
+            while parent[node] is not None and parent[parent[node]] is not None:
+                node = parent[node]
+            return f"n{first[node] or 0}"
+        for (dx, dy), code in order:
+            nxt = (current[0] + dx, current[1] + dy)
+            if nxt in parent or nxt in env.walls:
+                continue
+            if not (0 <= nxt[0] < env.size and 0 <= nxt[1] < env.size):
+                continue
+            parent[nxt] = current
+            first[nxt] = code if current == start else first[current]
+            frontier.append(nxt)
+    return "n0"
+
+
 def _size_bucket(env: GridWorld) -> str:
     """地图尺寸分档（v0.22）：让策略知道"这是大图还是小图"。"""
     size = int(getattr(env, "size", 8))
@@ -155,7 +188,8 @@ def state_of(env: GridWorld, with_walls: bool = False, with_path: bool = False) 
     parts.append(_hazard_bucket(env))     # v0.13：任务身份
     parts.append(_size_bucket(env))       # v0.22：地图尺寸分档
     if with_path:
-        parts.append(_path_bucket(env))   # v0.25：沿障碍绕行距离分档
+        parts.append(_path_bucket(env))   # v0.25：沿障碍绕行距离
+        parts.append(_next_step(env))     # v0.27：沿最短路径的下一跳方向
     return "|".join(parts)
 
 
