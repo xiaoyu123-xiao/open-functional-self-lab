@@ -97,6 +97,18 @@ def _hazard_bucket(env: GridWorld) -> str:
     return "h3"
 
 
+def _size_bucket(env: GridWorld) -> str:
+    """地图尺寸分档（v0.22）：让策略知道"这是大图还是小图"。"""
+    size = int(getattr(env, "size", 8))
+    if size <= 8:
+        return "s0"
+    if size <= 10:
+        return "s1"
+    if size <= 12:
+        return "s2"
+    return "s3"
+
+
 def state_of(env: GridWorld, with_walls: bool = False) -> str:
     """状态 =（食物方向 | 距离档 | 能量档 | 损伤档）。
 
@@ -112,7 +124,8 @@ def state_of(env: GridWorld, with_walls: bool = False) -> str:
     ]
     if with_walls:
         parts.append(_wall_code(env))
-    parts.append(_hazard_bucket(env))     # v0.13：任务身份，让多任务不再互相干扰
+    parts.append(_hazard_bucket(env))     # v0.13：任务身份
+    parts.append(_size_bucket(env))       # v0.22：地图尺寸分档
     return "|".join(parts)
 
 
