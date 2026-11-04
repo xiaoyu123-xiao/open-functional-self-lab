@@ -553,6 +553,34 @@ class WeightedHeadTests(unittest.TestCase):
         self.assertEqual(len(summary["multi"]["runs"][0]["rows"]), len(HELDOUT_CONFIGS))
 
 
+class WorkfareTests(unittest.TestCase):
+    """v0.37：按劳分配——存活奖励只在有进展时发放，堵住"站着领钱"。"""
+
+    def test_idle_agent_cannot_farm_bonus(self) -> None:
+        class Idle:
+            def act(self, observation, epsilon: float = 0.0):
+                return "rest"
+
+            def best_action(self, observation):
+                return "rest"
+
+            def update(self, *args, **kwargs):
+                pass
+
+        flat = evaluate(Idle(), eval_seeds(2), 60, hazards=0, survival_bonus=0.02)
+        workfare = evaluate(Idle(), eval_seeds(2), 60, hazards=0, survival_bonus=0.02,
+                            bonus_requires_progress=True)
+        self.assertGreater(flat["mean_return"], workfare["mean_return"])
+        self.assertLess(workfare["mean_return"], 0)
+
+    def test_progress_bonus_is_flagged(self) -> None:
+        import inspect
+
+        from lab.tasks import train
+
+        self.assertIn("bonus_requires_progress", inspect.signature(train).parameters)
+
+
 class RewardGeometryTests(unittest.TestCase):
     """v0.36：存活奖励与死亡惩罚可调；并锁定"不改默认值"这条。"""
 
