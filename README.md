@@ -11,6 +11,7 @@
 > - 你是另一个 AI 要接手执行 → [`AGENT-RUNBOOK.md`](AGENT-RUNBOOK.md)（含验收标准与停机条件）
 > - 想接大模型 → [`docs/DEPLOY-WITH-MODEL.md`](docs/DEPLOY-WITH-MODEL.md)
 > - 高配机器/GPU → [`docs/HARDWARE.md`](docs/HARDWARE.md)
+> - 想接自己的环境/模型 → [`docs/EXTEND.md`](docs/EXTEND.md)（20 行）
 > - 全貌 → [`docs/MASTER.md`](docs/MASTER.md)
 >
 > 📖 **不会写代码？** 直接看 [使用手册 docs/USER-GUIDE.md](docs/USER-GUIDE.md)：装好、跑起来、看懂输出，全程复制粘贴。

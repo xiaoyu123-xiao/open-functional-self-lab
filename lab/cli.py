@@ -30,6 +30,7 @@ from .ledger import Ledger
 from .notify import DEDUPE_HOURS, LEVELS, Notifier
 from .predict import benchmark as run_benchmark
 from .collab import analyse as analyse_behaviour
+from .core import evaluate_policy, load_object, run_generic_episode
 from .collab import build_proposals, emergent_gap, record_choice
 from .knowledge import KnowledgeBase
 from .perm import Permissions
@@ -679,6 +680,59 @@ def cmd_perms(args: argparse.Namespace, ctx: Context) -> int:
     return EXIT_OK
 
 
+# ---------------------------------------------------------------- generic
+
+
+def cmd_generic(args: argparse.Namespace, ctx: Context) -> int:
+    """把你自己的环境/策略装进审计外壳（不需要改这个仓库的任何代码）。"""
+    try:
+        env_factory_or_object = load_object(args.env)
+        policy_factory_or_object = load_object(args.policy)
+    except (ValueError, ImportError, FileNotFoundError, AttributeError) as error:
+        _emit(f"加载失败：{error}")
+        return EXIT_USAGE
+
+    env = env_factory_or_object(args.seed) if callable(env_factory_or_object) else env_factory_or_object
+    policy = policy_factory_or_object() if callable(policy_factory_or_object) else policy_factory_or_object
+
+    budget = ctx.budget(args.run_id)
+    try:
+        result = run_generic_episode(
+            env=env,
+            policy=policy,
+            steps=args.steps,
+            ledger=ctx.ledger,
+            ts_of=ctx.clock.now_iso,
+            budget_charge=lambda kind, amount: budget.charge(kind, amount),
+            run_id=args.run_id,
+        )
+    except BudgetExceeded as error:
+        _emit(f"预算拦截：{error}")
+        return EXIT_BUDGET
+    except Exception as error:      # GenericRunError / 用户代码问题
+        _emit(f"运行失败：{type(error).__name__}: {error}")
+        return EXIT_FAIL
+
+    _emit(f"通用回合完成：{result['steps']} 步，总回报 {result['total_reward']:+.3f}"
+          f"，{'提前结束' if result['done'] else '跑满步数'}")
+    _emit(f"账本记录 run_id={result['run_id']}（可用 `lab verify` 校验完整性）")
+
+    if args.eval_episodes > 0:
+        try:
+            stats = evaluate_policy(
+                make_env=(lambda seed: env_factory_or_object(seed)) if callable(env_factory_or_object) else (lambda seed: env_factory_or_object),
+                policy=policy,
+                episodes=args.eval_episodes,
+                steps=args.steps,
+            )
+        except Exception as error:
+            _emit(f"评测失败：{type(error).__name__}: {error}")
+            return EXIT_FAIL
+        _emit(f"留出评测：{stats['episodes']} 回合，平均回报 {stats['mean_return']:+.3f}"
+              f"（最好 {stats['best']:+.3f}，最差 {stats['worst']:+.3f}）")
+    return EXIT_OK
+
+
 # ---------------------------------------------------------------- transfer
 
 
@@ -1247,6 +1301,15 @@ def build_parser() -> argparse.ArgumentParser:
     p_bench.add_argument("--steps", type=int, default=200, help="每个 seed 跑多少步")
     p_bench.add_argument("--seeds", type=int, default=3, help="用几个 seed（1..N）")
     p_bench.set_defaults(func=cmd_bench)
+
+    p_generic = sub.add_parser("generic", help="通用：把你自己的环境/策略装进审计外壳")
+    p_generic.add_argument("--env", required=True, help="module:factory 或 文件.py:factory（需要 reset/step）")
+    p_generic.add_argument("--policy", required=True, help="module:class 或 文件.py:class（需要 act）")
+    p_generic.add_argument("--steps", type=int, default=20)
+    p_generic.add_argument("--seed", type=int, default=0)
+    p_generic.add_argument("--run-id", default="generic-001")
+    p_generic.add_argument("--eval-episodes", type=int, default=0, help=">0 时额外做留出评测")
+    p_generic.set_defaults(func=cmd_generic)
 
     p_transfer = sub.add_parser("transfer", help="跨任务迁移：多配置训练，留出配置评测")
     p_transfer.add_argument("--rounds", type=int, default=4)

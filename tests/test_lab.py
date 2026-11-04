@@ -26,6 +26,7 @@ from lab.env import GridWorld, greedy_action  # noqa: E402
 from lab.notify import Notifier  # noqa: E402
 from lab.selfmodel import SelfModel  # noqa: E402
 from lab.collab import analyse, build_proposals, emergent_gap  # noqa: E402
+from lab.core import evaluate_policy, run_generic_episode  # noqa: E402
 from lab.perm import Permissions  # noqa: E402
 from lab.store import SqliteStore  # noqa: E402
 from lab.transfer import HELDOUT_CONFIGS, TRAIN_CONFIGS  # noqa: E402
@@ -410,6 +411,64 @@ class LethalTaskTests(unittest.TestCase):
         result = run_episode(agent, 9001, 60, train=False, lethal=True)
         self.assertIn("dead", result)
         self.assertLessEqual(result["steps"], 60)
+
+
+class GenericCoreTests(unittest.TestCase):
+    """v0.18：把任意环境/策略装进审计外壳（对用户最有用的部分）。"""
+
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+        self.ledger = Ledger(self.root / "ledger.jsonl")
+
+    def tearDown(self) -> None:
+        self.tmp.cleanup()
+
+    def test_generic_run_records_and_scores(self) -> None:
+        from examples.lineworld import LineWorld, RightPolicy
+
+        result = run_generic_episode(
+            env=LineWorld(seed=0),
+            policy=RightPolicy(),
+            steps=12,
+            ledger=self.ledger,
+            ts_of=lambda: "2026-01-01T00:00:00Z",
+            budget_charge=lambda kind, amount: None,
+        )
+        self.assertEqual(result["steps"], 9)
+        self.assertEqual(result["total_reward"], 1.0)
+        self.assertTrue(result["done"])
+        self.assertEqual(len(self.ledger.events("gstep")), 9)
+
+    def test_generic_rejects_bad_interface(self) -> None:
+        class NoStep:
+            def reset(self):
+                return 0
+
+        with self.assertRaises(Exception):
+            run_generic_episode(
+                env=NoStep(), policy=type("P", (), {"act": lambda self, o: 0})(),
+                steps=3, ledger=self.ledger, ts_of=lambda: "t",
+            )
+
+    def test_generic_policy_error_writes_alert(self) -> None:
+        class Boom:
+            def act(self, observation):
+                raise RuntimeError("policy exploded")
+
+        with self.assertRaises(Exception):
+            run_generic_episode(
+                env=type("E", (), {"reset": lambda self: 0, "step": lambda self, a: {"observation": 0}})(),
+                policy=Boom(), steps=3, ledger=self.ledger, ts_of=lambda: "2026-01-01T00:00:00Z",
+            )
+        self.assertEqual(len(self.ledger.events("alert")), 1)
+
+    def test_evaluate_policy_fixed_seeds(self) -> None:
+        from examples.lineworld import LineWorld, RightPolicy
+
+        stats = evaluate_policy(make_env=LineWorld, policy=RightPolicy(), episodes=3, steps=12)
+        self.assertEqual(stats["mean_return"], 1.0)
+        self.assertEqual(stats["episodes"], 3)
 
 
 class TransferTests(unittest.TestCase):
