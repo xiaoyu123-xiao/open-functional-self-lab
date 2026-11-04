@@ -14,6 +14,7 @@
 > - 想接大模型 → [`docs/DEPLOY-WITH-MODEL.md`](docs/DEPLOY-WITH-MODEL.md)
 > - 高配机器/GPU → [`docs/HARDWARE.md`](docs/HARDWARE.md)
 > - 想接自己的环境/模型 → [`docs/EXTEND.md`](docs/EXTEND.md)（20 行）
+> - 只看成果总结 → [`docs/EXPERIMENTS-SUMMARY.md`](docs/EXPERIMENTS-SUMMARY.md)（九次实验，八次是坑）
 > - 想看三个真实接入例子 → [`examples/`](examples/README.md)（评测台 / 模型包装 / 带预算取样）
 > - 担心它会碰我电脑 → [`docs/security-audit.md`](docs/security-audit.md)（含自查命令）
 > - 别的语言 → [`docs/i18n.md`](docs/i18n.md)（现状 + 怎么加）

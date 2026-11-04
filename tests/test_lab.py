@@ -29,7 +29,7 @@ from lab.collab import analyse, build_proposals, emergent_gap  # noqa: E402
 from lab.core import evaluate_policy, run_generic_episode  # noqa: E402
 from lab.perm import Permissions  # noqa: E402
 from lab.store import SqliteStore  # noqa: E402
-from lab.transfer import HELDOUT_CONFIGS, TRAIN_CONFIGS  # noqa: E402
+from lab.transfer import HELDOUT_CONFIGS, TRAIN_CONFIGS, WIDE_HELDOUT_CONFIGS, WIDE_TRAIN_CONFIGS  # noqa: E402
 from lab.transfer import run as run_transfer  # noqa: E402
 from lab.knowledge import KnowledgeBase  # noqa: E402
 from lab.agent import QLearningAgent  # noqa: E402
@@ -513,6 +513,16 @@ class TransferTests(unittest.TestCase):
         summary = run_transfer(rounds=1, episodes=5, steps=20, eval_count=3, algo="linear")
         self.assertEqual(summary["algo"], "linear")
         self.assertEqual(len(summary["multi"]["runs"][0]["rows"]), len(HELDOUT_CONFIGS))
+
+    def test_wide_family_configs_are_disjoint(self) -> None:
+        train_keys = {(c["hazards"], c["lethal"], c.get("size", 8)) for c in WIDE_TRAIN_CONFIGS}
+        heldout_keys = {(c["hazards"], c["lethal"], c.get("size", 8)) for c in WIDE_HELDOUT_CONFIGS}
+        self.assertEqual(train_keys & heldout_keys, set())
+
+    def test_transfer_accepts_family_argument(self) -> None:
+        summary = run_transfer(rounds=1, episodes=5, steps=20, eval_count=3, family="wide", repeats=1)
+        self.assertEqual(summary["family"], "wide")
+        self.assertEqual(len(summary["multi"]["runs"][0]["rows"]), len(WIDE_HELDOUT_CONFIGS))
 
     def test_train_and_heldout_configs_are_disjoint(self) -> None:
         train_keys = {(c["hazards"], c["lethal"]) for c in TRAIN_CONFIGS}

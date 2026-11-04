@@ -34,6 +34,19 @@ HELDOUT_CONFIGS: Tuple[Dict[str, Any], ...] = (
     {"hazards": 10, "lethal": True},
 )
 
+# v0.21：更宽的任务族（第二个维度是地图尺寸），用于检验"举一反三"是否成立
+WIDE_TRAIN_CONFIGS: Tuple[Dict[str, Any], ...] = (
+    {"hazards": 4, "lethal": True, "size": 8},
+    {"hazards": 6, "lethal": True, "size": 10},
+    {"hazards": 4, "lethal": False, "size": 8},
+)
+WIDE_HELDOUT_CONFIGS: Tuple[Dict[str, Any], ...] = (
+    {"hazards": 6, "lethal": True, "size": 12},
+    {"hazards": 10, "lethal": True, "size": 10},
+)
+
+FAMILIES = {"core": (TRAIN_CONFIGS, HELDOUT_CONFIGS), "wide": (WIDE_TRAIN_CONFIGS, WIDE_HELDOUT_CONFIGS)}
+
 
 def train_multi(
     agent: QLearningAgent,
@@ -82,7 +95,11 @@ def run(
     eval_count: int = 20,
     algo: str = "tabular",
     repeats: int = 1,
+    family: str = "core",
 ) -> Dict[str, Any]:
+    if family not in FAMILIES:
+        raise ValueError(f"family 只能是 {sorted(FAMILIES)}")
+    train_configs, heldout_configs = FAMILIES[family]
     seeds = eval_seeds(eval_count)
     if repeats <= 0:
         raise ValueError("repeats 必须是正整数")
@@ -101,12 +118,12 @@ def run(
     for repeat in range(repeats):
         agent_seed = 11 + repeat
         single = make_agent(agent_seed)
-        single_episodes = train_multi(single, [TRAIN_CONFIGS[0]], rounds, episodes, steps)
-        single_rows = evaluate_configs(single, HELDOUT_CONFIGS, seeds, steps)
+        single_episodes = train_multi(single, [train_configs[0]], rounds, episodes, steps)
+        single_rows = evaluate_configs(single, heldout_configs, seeds, steps)
 
         multi = make_agent(agent_seed)
-        multi_episodes = train_multi(multi, TRAIN_CONFIGS, rounds, episodes, steps)
-        multi_rows = evaluate_configs(multi, HELDOUT_CONFIGS, seeds, steps)
+        multi_episodes = train_multi(multi, train_configs, rounds, episodes, steps)
+        multi_rows = evaluate_configs(multi, heldout_configs, seeds, steps)
 
         single_mean = sum(row["learned"] for row in single_rows) / len(single_rows)
         multi_mean = sum(row["learned"] for row in multi_rows) / len(multi_rows)
@@ -130,6 +147,7 @@ def run(
     ratio_mean = _mean(ratios)
     return {
         "algo": algo,
+        "family": family,
         "repeats": repeats,
         "seeds": list(seeds),
         "steps": steps,

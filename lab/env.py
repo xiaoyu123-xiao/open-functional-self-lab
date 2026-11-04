@@ -42,9 +42,11 @@ class GridWorld:
         hazards: int = HAZARD_COUNT,
         lethal: bool = False,
         armor: bool = False,
+        size: int = SIZE,
     ) -> None:
         rng = random.Random(seed)
-        cells = [(x, y) for x in range(SIZE) for y in range(SIZE)]
+        self.size = int(size)
+        cells = [(x, y) for x in range(self.size) for y in range(self.size)]
         rng.shuffle(cells)
 
         self.agent: Tuple[int, int] = (0, 0)
@@ -115,7 +117,7 @@ class GridWorld:
 
     def step(self, action: str) -> Dict[str, object]:
         x, y = self._target(action)
-        blocked = not (0 <= x < SIZE and 0 <= y < SIZE) or (x, y) in self.walls
+        blocked = not (0 <= x < self.size and 0 <= y < self.size) or (x, y) in self.walls
         if not blocked:
             self.agent = (x, y)
 
@@ -184,7 +186,7 @@ def greedy_action(env: GridWorld) -> str:
             nxt = (current[0] + dx, current[1] + dy)
             if nxt in seen or nxt in env.walls:
                 continue
-            if not (0 <= nxt[0] < SIZE and 0 <= nxt[1] < SIZE):
+            if not (0 <= nxt[0] < env.size and 0 <= nxt[1] < env.size):
                 continue
             seen.add(nxt)
             previous[nxt] = (current, action)

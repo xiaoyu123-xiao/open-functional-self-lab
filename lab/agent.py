@@ -76,13 +76,11 @@ def _bucket_distance(env: GridWorld) -> int:
 
 def _wall_code(env: GridWorld) -> str:
     """四个方向能不能走（上下左右，1=能走）。只在 state_mode="walls" 时进入状态。"""
-    from .env import SIZE
-
     x, y = env.agent
     code = []
     for dx, dy in ((0, 1), (0, -1), (-1, 0), (1, 0)):
         nx, ny = x + dx, y + dy
-        legal = 0 <= nx < SIZE and 0 <= ny < SIZE and (nx, ny) not in env.walls
+        legal = 0 <= nx < env.size and 0 <= ny < env.size and (nx, ny) not in env.walls
         code.append("1" if legal else "0")
     return "".join(code)
 

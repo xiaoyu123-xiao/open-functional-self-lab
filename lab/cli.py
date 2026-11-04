@@ -738,8 +738,8 @@ def cmd_generic(args: argparse.Namespace, ctx: Context) -> int:
 
 def cmd_transfer(args: argparse.Namespace, ctx: Context) -> int:
     """跨任务迁移：在三个配置上训练，在没见过的两个配置上考。"""
-    _emit(f"训练配置 {len(__import__('lab.transfer', fromlist=['TRAIN_CONFIGS']).TRAIN_CONFIGS)} 个，"
-          f"留出配置 {len(__import__('lab.transfer', fromlist=['HELDOUT_CONFIGS']).HELDOUT_CONFIGS)} 个")
+    _emit(f"任务族 {args.family}")
+
     summary = run_transfer(
         rounds=args.rounds,
         episodes=args.episodes,
@@ -747,6 +747,7 @@ def cmd_transfer(args: argparse.Namespace, ctx: Context) -> int:
         eval_count=args.eval_count,
         algo=args.algo,
         repeats=args.repeats,
+        family=args.family,
     )
     _emit(format_transfer(summary))
     ctx.ledger.append(
@@ -1318,6 +1319,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_transfer.add_argument("--eval-count", type=int, default=20)
     p_transfer.add_argument("--algo", choices=["tabular", "linear", "multihead", "weighted"], default="tabular")
     p_transfer.add_argument("--repeats", type=int, default=1, help="用几组不同的初始种子重复，默认 1")
+    p_transfer.add_argument("--family", choices=["core", "wide"], default="core", help="任务族：core=只变危险区；wide=再变地图尺寸")
     p_transfer.set_defaults(func=cmd_transfer)
 
     p_autonomy = sub.add_parser("autonomy", help="自主级别：locked / supervised / full（一次性给到位）")
