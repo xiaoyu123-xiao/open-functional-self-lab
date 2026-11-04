@@ -38,7 +38,7 @@
 ## 4. 一键验证（复制粘贴）
 
 ```bash
-git clone https://github.com/<your-org>/open-functional-self-lab.git
+git clone https://github.com/xiaoyu123-xiao/open-functional-self-lab.git
 cd open-functional-self-lab
 python -m lab.cli doctor
 python -m unittest discover -s tests -q

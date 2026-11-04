@@ -34,7 +34,7 @@
 ## 五分钟跑通
 
 ```bash
-git clone https://github.com/<your-org>/open-functional-self-lab.git
+git clone https://github.com/xiaoyu123-xiao/open-functional-self-lab.git
 cd open-functional-self-lab
 
 python -m lab.cli doctor          # 环境与仓库自检，应全绿

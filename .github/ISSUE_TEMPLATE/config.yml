@@ -2,8 +2,8 @@
 blank_issues_enabled: false
 contact_links:
   - name: 安全漏洞（私下报告）
-    url: https://github.com/your-org/open-functional-self-lab/security/advisories/new
+    url: https://github.com/xiaoyu123-xiao/open-functional-self-lab/security/advisories/new
     about: 请勿在公开 Issue 里贴可利用细节
   - name: 讨论区（想法、假设、失败复盘）
-    url: https://github.com/your-org/open-functional-self-lab/discussions
+    url: https://github.com/xiaoyu123-xiao/open-functional-self-lab/discussions
     about: 尚未成形的想法放这里，不要开 Issue

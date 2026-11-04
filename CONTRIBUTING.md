@@ -3,7 +3,7 @@
 ## 0. 30 秒版本
 
 ```bash
-git clone https://github.com/<your-org>/open-functional-self-lab.git && cd open-functional-self-lab
+git clone https://github.com/xiaoyu123-xiao/open-functional-self-lab.git && cd open-functional-self-lab
 python -m lab.cli doctor                          # 应全绿
 python -m unittest discover -s tests -v           # 应全过
 python -m lab.cli init && python -m lab.cli run --steps 20 && python -m lab.cli verify
