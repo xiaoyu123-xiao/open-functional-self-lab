@@ -2,35 +2,48 @@
 
 > [中文](README.md) | [English](README.en.md)
 
-> 研究"功能性自我模型"和开放式研究循环。**我们不宣称任何系统拥有意识。**
->
-> **👉 只看一页：[docs/ONE-PAGE.md](docs/ONE-PAGE.md)**（有图、有命令、有证据）
->
-> **先读哪一份？**
-> - **只想看一页 → [`docs/ONE-PAGE.md`](docs/ONE-PAGE.md)**
-> - 完全不懂它是什么 → [`docs/WHAT-IS-IT.md`](docs/WHAT-IS-IT.md)（2 分钟，有图有例子）
-> - 想直接跑 → [`docs/USER-GUIDE.md`](docs/USER-GUIDE.md)（复制粘贴即可）
-> - 你是另一个 AI 要接手执行 → [`AGENT-RUNBOOK.md`](AGENT-RUNBOOK.md)（含验收标准与停机条件）
-> - 想接大模型 → [`docs/DEPLOY-WITH-MODEL.md`](docs/DEPLOY-WITH-MODEL.md)
-> - 高配机器/GPU → [`docs/HARDWARE.md`](docs/HARDWARE.md)
-> - **一行拿到安全规划** → [`docs/SAFETY.md`](docs/SAFETY.md)（`lab/safety.py`，不依赖本项目其它部分）
-> - 想接自己的环境/模型 → [`docs/EXTEND.md`](docs/EXTEND.md)（20 行）
-> - 只看成果总结 → [`docs/EXPERIMENTS-SUMMARY.md`](docs/EXPERIMENTS-SUMMARY.md)（九次实验，八次是坑）
-> - 想看三个真实接入例子 → [`examples/`](examples/README.md)（评测台 / 模型包装 / 带预算取样）
-> - 担心它会碰我电脑 → [`docs/security-audit.md`](docs/security-audit.md)（含自查命令）
-> - **上下文丢了先读** → [`docs/MEMORY-PROTOCOL.md`](docs/MEMORY-PROTOCOL.md)（记忆四步流 + 恢复顺序）
-> - 犯过的错清单 → `python -m lab.cli lessons`（9 条，每条都有执行位置）
-> - 别的语言 → [`docs/i18n.md`](docs/i18n.md)（现状 + 怎么加）
-> - 全貌 → [`docs/MASTER.md`](docs/MASTER.md)
->
-> 📖 **不会写代码？** 直接看 [使用手册 docs/USER-GUIDE.md](docs/USER-GUIDE.md)：装好、跑起来、看懂输出，全程复制粘贴。
-> 🗺️ **想了解全貌？** 看 [总册 docs/MASTER.md](docs/MASTER.md)：需求、架构、模块、命令、路线图、边界。
+# Open Functional Self Lab
 
-一个**能跑起来**的受控实验台：把最容易被口头承诺、却最难验证的部分——时间、预算、状态机、
-审计账本、红线、可视化——先做成可执行、可测试、可回滚的代码。
+> [中文](README.md) | [English](README.en.md)
 
-`Python ≥ 3.10` · 零第三方依赖 · 纯 CPU · 离线可跑 · MIT
+**这个仓库是什么**：一份**零依赖的可复现实验模板** + 一份**诚实的失败档案** + 一条**被验证过的小结论**。
 
+**它不是什么**：不是自我进化系统，不是安全 RL 框架，不是通用 agent 库。**技术上也不新颖**——
+"把危险区纳入规划"属于 safe RL / shielding 一类成熟方法（[Alshiekh et al., AAAI 2018](https://aaai.org/papers/11797-safe-reinforcement-learning-via-shielding/)）。
+**想找现成安全 RL 库的人，请优先用 shielding 的官方实现；这个仓库不适合你。**
+
+> **起源**：这个项目最初的想法（自我进化、连续记忆、人机协作、左脚踩右脚）原样记在
+> [`docs/ORIGIN.md`](docs/ORIGIN.md)，包括哪些没做到。**那一页不要删。**
+
+## 唯一可拿走的结论
+
+> 在有危险区的环境里，**把危险区纳入规划**比只走最短路更好：
+> **受伤从未更高**；在伤害致命（碰即死）或环境会变（危险区漂移）时，吃食不减少而严格更好。
+> 7 个世界、2 种地图生成规则都成立。
+
+五行就能用（不需要训练、不需要本仓库其它部分）：
+
+```python
+from lab.safety import hazard_aware_path
+step = hazard_aware_path(env)      # 无路可走返回 None
+if step:
+    env.step(step)
+```
+
+详见 [`docs/SAFETY.md`](docs/SAFETY.md)。
+
+## 它可能对你有用的三个地方
+
+| 你可能想要 | 这里有什么 |
+|---|---|
+| 一段零依赖的"绕开危险区"规划 | `lab/safety.py`（BFS，标准库，5 行用法） |
+| 一套"不骗自己"的实验流程 | 判据先写后跑、≥20 组才可声称显著、奖励一改旧分数作废、结论必须引用已核实事实 |
+| 一份失败档案 | 31 篇实验，**26 篇是负结果**，每篇带复算命令 |
+
+## 一句话劝退
+
+如果你要的是"能自我进化的 AI"——**这个仓库没有，而且我们 31 篇实验里 26 篇负结果正是它做不到的证据。**
+如果你要的是"一个小而干净的审计/自检模板，附一份真实的失败记录"——你可以从这里拿走。
 
 ## 证据（可复算）
 

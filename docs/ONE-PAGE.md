@@ -93,6 +93,11 @@ python -m lab.cli loop --cycles 3 --lethal      # 学三轮，看它变强没有
 
 接法见 [`docs/EXTEND.md`](EXTEND.md)：**20 行，两个方法（reset/step、act）**。
 
+## 起源与现状
+
+最初的想法（自我进化 / 连续记忆 / 人机协作）与**哪些没做到**，原样记在
+[`docs/ORIGIN.md`](ORIGIN.md)。这个仓库现在的真实身份是：**实验模板 + 失败档案 + 一条小结论**。
+
 ## 你可能需要的下一份
 
 | 你的身份 | 读这份 |
@@ -102,4 +107,5 @@ python -m lab.cli loop --cycles 3 --lethal      # 学三轮，看它变强没有
 | 是另一个 AI，要执行 | [`AGENT-RUNBOOK.md`](../AGENT-RUNBOOK.md) |
 | 想接大模型 | [`docs/DEPLOY-WITH-MODEL.md`](DEPLOY-WITH-MODEL.md) |
 | 机器很强，想并行 | [`docs/HARDWARE.md`](HARDWARE.md) |
+| 想拿走一个能用的东西 | [`SAFETY.md`](SAFETY.md)（安全规划，5 行） |
 | 想知道它哪里可能错 | [`docs/self-audit.md`](self-audit.md) + [`docs/experiments/`](experiments/) |
