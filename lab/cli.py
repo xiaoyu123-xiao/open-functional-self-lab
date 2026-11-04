@@ -651,10 +651,13 @@ def cmd_ref(args: argparse.Namespace, ctx: Context) -> int:
 
 def cmd_frontier(args: argparse.Namespace, ctx: Context) -> int:
     budgets = [float(x) for x in args.budgets.split(",") if x.strip()]
-    result = run_frontier(budgets, repeats=args.repeats)
-    _emit(format_frontier(result))
-    ctx.ledger.append("frontier", {"budgets": budgets, "picks": result["picks"], "points": result["points"]},
-                      ctx.clock.now_iso())
+    for world in [w.strip() for w in args.world.split(",") if w.strip()]:
+        result = run_frontier(budgets, repeats=args.repeats, world=world)
+        _emit(format_frontier(result))
+        _emit("")
+        ctx.ledger.append("frontier", {"world": world, "budgets": budgets,
+                                       "picks": result["picks"], "points": result["points"]},
+                          ctx.clock.now_iso())
     return EXIT_OK
 
 
@@ -1433,6 +1436,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_frontier = sub.add_parser("frontier", help="预算前沿：在受伤预算内选最优策略")
     p_frontier.add_argument("--budgets", default="0,5,10,15", help="逗号分隔的受伤预算")
     p_frontier.add_argument("--repeats", type=int, default=6, help="学习器重复组数")
+    p_frontier.add_argument("--world", default="ref-1", help="世界：ref-1,lethal,one_hit,slippery（逗号分隔可多个）")
     p_frontier.set_defaults(func=cmd_frontier)
 
     p_facts = sub.add_parser("facts", help="已知事实库：下结论前必须引用")

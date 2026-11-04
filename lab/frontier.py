@@ -73,13 +73,25 @@ def _measure(candidate: Candidate, seeds: Sequence[int], repeats: int, base: Dic
     return sum(ates) / len(ates), sum(hurts) / len(hurts)
 
 
-def run(budgets: Sequence[float], repeats: int = 6, base: Dict[str, Any] | None = None) -> Dict[str, Any]:
+WORLDS: Dict[str, Dict[str, Any]] = {
+    "ref-1": {},
+    "lethal": {"lethal": True},
+    "one_hit": {"one_hit": True},
+    "slippery": {"slippery": 0.3},
+}
+
+
+def run(budgets: Sequence[float], repeats: int = 6, base: Dict[str, Any] | None = None,
+        world: str = "ref-1") -> Dict[str, Any]:
     from .tasks import eval_seeds
 
+    if world not in WORLDS:
+        raise ValueError(f"未知世界：{world}（可选 {sorted(WORLDS)}）")
     base = dict(base or {})
     base.update({"steps": base.get("steps", 120), "size": 10, "layout": "corridor",
                  "hazards": 6, "lethal": False, "hurt_penalty": -1.0,
                  "shaping": "legacy", "with_path": True})
+    base.update(WORLDS[world])
     seeds = eval_seeds(6)
 
     points: List[Dict[str, Any]] = []
@@ -96,11 +108,11 @@ def run(budgets: Sequence[float], repeats: int = 6, base: Dict[str, Any] | None 
         best = max(feasible, key=lambda p: p["ate"])
         picks.append({"budget": budget, **best})
 
-    return {"points": points, "picks": picks, "repeats": repeats}
+    return {"world": world, "points": points, "picks": picks, "repeats": repeats}
 
 
 def format_report(result: Dict[str, Any]) -> str:
-    lines = ["候选策略（ref-1，6 个评测 seed，单位：份/回合、次/回合）："]
+    lines = [f"世界 {result.get('world', 'ref-1')}（6 个评测 seed，单位：份/回合、次/回合）："]
     for point in result["points"]:
         lines.append(f"  {point['name']:<12} 吃 {point['ate']:5.2f}　伤 {point['hurt']:5.2f}")
     lines.append("")
