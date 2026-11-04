@@ -247,6 +247,8 @@ git tag -d v0.1.0 && git push origin :refs/tags/v0.1.0   # 仅当 tag 还没人�
 
 | 现象 | 原因 | 处理 |
 |---|---|---|
+| `Could not resolve host: github.com` | 系统里残留了指向已关闭代理的 `HTTP_PROXY`/`HTTPS_PROXY`，或本机 DNS 抖动 | `publish.ps1` 已用 `-c http.proxy=` 强制直连；手动推送时照抄：`git -c http.proxy= -c https.proxy= push -u origin main` |
+| `Failed to connect to 127.0.0.1 port 7892` | 同上，反方向：代理没开却在用 | 打开代理软件，或加 `-c http.proxy=` 直连 |
 | `git push` 报 `remote: Support for password authentication was removed` | 用了账号密码 | 换 PAT 或 `gh auth setup-git` |
 | Windows 上 `git commit` 报 `LF will be replaced by CRLF` | `core.autocrlf` 为 true | `git config core.autocrlf false` 后重提交 |
 | CI 里 `python -m lab.cli doctor` 报 `disk` WARN | 磁盘 <1GB | 无法避免，属 WARN 不阻塞 |
