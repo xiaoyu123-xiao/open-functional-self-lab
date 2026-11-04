@@ -1,4 +1,4 @@
-# 一键发布（Windows PowerShell）。等价于 docs/publish.md 的第 0 + 3 步。
+﻿# 一键发布（Windows PowerShell）。等价于 docs/publish.md 的第 0 + 3 步。
 # 用法：右键"使用 PowerShell 运行"，或在仓库目录执行  .\scripts\publish.ps1
 # 认证：首次推送会弹出 Git Credential Manager 的浏览器登录，登录你的 GitHub 账号即可。
 # 注意：不做 force push；已存在的 commit 不会被改写。
