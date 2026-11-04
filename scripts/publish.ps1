@@ -7,7 +7,7 @@ param(
     [switch]$SkipPreflight
 )
 
-$ErrorActionPreference = "Stop"
+$ErrorActionPreference = "Continue"    # 原生命令(git)往 stderr 写内容不能中断脚本；错误用退出码判断
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
 
@@ -64,21 +64,32 @@ $candidates += @{ Name = '直连'; Args = @('-c', 'http.proxy=', '-c', 'https.pr
 
 $proxyArgs = $null
 foreach ($candidate in $candidates) {
-    git @($candidate.Args) ls-remote --exit-code $remote > $null 2>&1
-    if ($LASTEXITCODE -eq 0 -or $LASTEXITCODE -eq 2) {
+    # 关键：把 stderr 收进变量、用 $LASTEXITCODE 判断。不能让它抛异常，否则后面的候选路径不会被尝试。
+    $probeOutput = git @($candidate.Args) ls-remote --exit-code $remote 2>&1
+    $probeCode = $LASTEXITCODE
+    if ($probeCode -eq 0 -or $probeCode -eq 2) {
         $proxyArgs = $candidate.Args
         Write-Host "可用路径：$($candidate.Name)（空仓库返回 2 属正常）"
         break
     }
-    Warn "$($candidate.Name) 连不上，换下一条"
+    $firstLine = ($probeOutput | Where-Object { $_ -is [string] -and $_.Trim() } | Select-Object -First 1)
+    Warn "$($candidate.Name) 连不上（exit=$probeCode）$(if ($firstLine) { "：$($firstLine.ToString().Trim())" })"
 }
 
 if (-not $proxyArgs) {
     Fail "所有路径都连不上 $remote"
-    Write-Host "排查顺序："
-    Write-Host "  1. 仓库地址是否正确、网页上是否已建好（空仓库也算建好）"
-    Write-Host "  2. 浏览器能打开 https://github.com 吗？打不开是网络/代理问题"
-    Write-Host "  3. 设置 → 网络和 Internet → 代理，确认代理软件在运行、端口正确"
+    Write-Host ""
+    Write-Host "现场诊断："
+    $proxySetting = (Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings' -ErrorAction SilentlyContinue)
+    Write-Host "  系统代理：ProxyEnable=$($proxySetting.ProxyEnable)  ProxyServer=[$($proxySetting.ProxyServer)]"
+    $listening = (netstat -ano | Select-String 'LISTENING' | Select-String ([regex]::Escape([string]$proxySetting.ProxyServer)))
+    Write-Host "  该端口是否在监听：$(if ($listening) { '是' } else { '否 —— 代理软件没在运行，或端口变了' })"
+    Write-Host ""
+    Write-Host "按这个顺序处理："
+    Write-Host "  1. 把平时上网用的代理/加速软件打开（现在是关着的）"
+    Write-Host "  2. 在它的设置里确认『系统代理』是开的，再看一下它现在用的端口号"
+    Write-Host "  3. 端口不是 7892 的话：设置 → 网络和 Internet → 代理 → 手动设置代理，改成实际端口"
+    Write-Host "  4. 不想用代理：在那一步关掉『使用代理服务器』，然后重跑本脚本（会走直连）"
     exit 1
 }
 
