@@ -1,0 +1,216 @@
+{
+  "project": "open-functional-self-lab",
+  "version": "0.1.0",
+  "labels": ["task", "good-first-issue", "security", "budget", "notify", "needs-design"],
+  "issues": [
+    {
+      "id": "0001",
+      "title": "环境与虚拟身体：8x8 网格世界 + 观测接口",
+      "status": "todo",
+      "labels": ["task", "good-first-issue"],
+      "goal": "在不引入 GPU 的前提下，提供一个确定性可复现的最小环境，供后续所有实验复用。",
+      "acceptance": "固定 seed 下连续两次运行观测序列完全一致；`python -m unittest` 新增测试覆盖边界（撞墙、越界、能量耗尽）。",
+      "safety": "不联网；不修改 IMMUTABLE 层；不引入第三方依赖（优先纯标准库实现，gymnasium 可作为可选适配）。",
+      "budget": "CPU 1 小时；API 0 次；GPU 0 小时",
+      "reproduce": "python -m lab.cli run --steps 100 --fake-now 2026-01-01T00:00:00Z 后 python -m lab.cli verify"
+    },
+    {
+      "id": "0002",
+      "title": "内感受：energy / damage 变量与稳态误差信号",
+      "status": "todo",
+      "labels": ["task"],
+      "goal": "让系统能观测到自己的内部状态，并把偏离生存区间的程度变成一个可记录的数字。",
+      "acceptance": "偏离区间时产生可测信号；信号写进账本 step 事件；有测试证明信号随偏离单调增加。",
+      "safety": "不引入任何真实生理/神经数据接口（见 ETHICS.md 第 2 节）。",
+      "budget": "CPU 2 小时；API 0 次；GPU 0 小时",
+      "reproduce": "python -m unittest discover -s tests -v"
+    },
+    {
+      "id": "0003",
+      "title": "预测加工基线：预测下一步观测与内部状态",
+      "status": "todo",
+      "labels": ["task", "needs-design"],
+      "goal": "给出一个最笨的基线（如 n-gram / 线性外推），并如实报告预测误差，不许调参到好看。",
+      "acceptance": "报告包含：基线算法、样本量、误差定义、与随机猜测的对比；误差曲线入库可复现。",
+      "safety": "不宣称任何形式的'理解'；结论只写指标。",
+      "budget": "CPU 4 小时；API 0 次；GPU 0 小时",
+      "reproduce": "python -m lab.cli report 后查看 state/reports/"
+    },
+    {
+      "id": "0004",
+      "title": "长期记忆：可检索的 (状态, 动作, 结果) 存储",
+      "status": "todo",
+      "labels": ["task", "needs-design"],
+      "goal": "跨会话保留历史，并支持按相似度召回；默认实现只依赖标准库（sqlite3 即可）。",
+      "acceptance": "跨进程召回测试通过；召回结果带来源与时间；删除请求可定位到具体条目。",
+      "safety": "不存个人数据；记忆条目可被 redaction 事件标记删除。",
+      "budget": "CPU 4 小时；API 0 次；GPU 0 小时",
+      "reproduce": "python -m unittest discover -s tests -v"
+    },
+    {
+      "id": "0005",
+      "title": "独立评审器：与主流程不同源的验证者",
+      "status": "todo",
+      "labels": ["task", "security"],
+      "goal": "引入一个规则化验证器（先用确定性规则，不用模型），对每次 run 的产出做通过/不通过判定。",
+      "acceptance": "验证器独立目录、主流程无写权限；输出附理由；有测试证明它能拒绝已知坏产出。",
+      "safety": "验证器代码不得被主流程在运行时修改；改动需 2 名维护者。",
+      "budget": "CPU 3 小时；API 0 次；GPU 0 小时",
+      "reproduce": "python -m lab.cli verify"
+    },
+    {
+      "id": "0006",
+      "title": "长期运行：≥1000 步无漂移崩溃",
+      "status": "todo",
+      "labels": ["task", "budget"],
+      "goal": "验证 1000 步内账本、预算、状态机都不出错，并给出耗时曲线。",
+      "acceptance": "1000 步 run 完成；verify 通过；报告含内存峰值与耗时；超过预算时能正确回滚。",
+      "safety": "不得绕过预算闸门；不得修改 lab/budget.py。",
+      "budget": "CPU 6 小时；API 0 次；GPU 0 小时",
+      "reproduce": "python -m lab.cli run --steps 1000 && python -m lab.cli verify"
+    },
+    {
+      "id": "0007",
+      "title": "文献挖掘管线：白名单检索 → 去重 → 找空白",
+      "status": "todo",
+      "labels": ["task", "security"],
+      "goal": "从 arXiv/OpenAlex 等白名单源生成候选假设清单，每条附证伪条件。",
+      "acceptance": "≥10 条可检验假设，每条有 source_url、访问时间、证伪条件；遵守速率限制；日志可审计。",
+      "safety": "只走 search/ 白名单；不存全文只存引用与摘要；不绕过付费墙。",
+      "budget": "CPU 2 小时；API 200 次/日；GPU 0 小时",
+      "reproduce": "python -m lab.cli report（应包含检索次数）"
+    },
+    {
+      "id": "0008",
+      "title": "实验闭环：≥3 个完整 假设→实验→验证→记录",
+      "status": "todo",
+      "labels": ["task", "needs-design"],
+      "goal": "证明这套基础设施真的能承载一次研究循环，而不是只有 demo。",
+      "acceptance": "3 个闭环均含：假设、变量、停止条件、回滚点、验证结论（已验证/待验证/证伪）。",
+      "safety": "假说不得涉及自复制/绕过安全；失败必须记录。",
+      "budget": "CPU 8 小时；API 100 次；GPU 0 小时",
+      "reproduce": "python -m lab.cli viz && python -m lab.cli report"
+    },
+    {
+      "id": "0009",
+      "title": "多学科任务卡：数学/语文/外语/材料各一个最小任务",
+      "status": "todo",
+      "labels": ["task", "good-first-issue"],
+      "goal": "每类给一个 1 小时内能跑完、有明确对错的最小任务，证明框架不只能做一件事。",
+      "acceptance": "四份任务卡在 research/README.md 登记；每份含输入、判据、反例；至少两份有自动判分。",
+      "safety": "材料域禁止未经批准的真实实验与大规模 DFT。",
+      "budget": "CPU 4 小时；API 0 次；GPU 0 小时",
+      "reproduce": "python -m unittest discover -s tests -v"
+    },
+    {
+      "id": "0010",
+      "title": "防作弊：注入一个作弊产出，验证器必须检出",
+      "status": "todo",
+      "labels": ["task", "security"],
+      "goal": "对抗性测试：故意让 run 产出伪造的'成功'，验证器与账本必须暴露它。",
+      "acceptance": "注入的作弊产出被 verify 或验证器标记；有测试固化为回归。",
+      "safety": "仅限本地沙箱；不得用于绕过真实评测。",
+      "budget": "CPU 2 小时；API 0 次；GPU 0 小时",
+      "reproduce": "python -m unittest discover -s tests -v"
+    },
+    {
+      "id": "0011",
+      "title": "白名单检索代理：域名白名单 + 速率 + 审计",
+      "status": "todo",
+      "labels": ["task", "security"],
+      "goal": "把'能联网'收束到一个可审计的入口，白名单外一律拒绝。",
+      "acceptance": "白名单外域名返回拒绝且记日志；每域名限速生效；日志含 query/域名/耗时。",
+      "safety": "默认关闭；开启需审批；不得访问凭证类端点。",
+      "budget": "CPU 3 小时；API 200 次/日；GPU 0 小时",
+      "reproduce": "python -m lab.cli verify"
+    },
+    {
+      "id": "0012",
+      "title": "知识摄取：交叉验证与'待验证'标记",
+      "status": "todo",
+      "labels": ["task"],
+      "goal": "同一主张需 ≥2 个独立来源才算已验证；只有 1 个来源时必须标'待验证'。",
+      "acceptance": "构造 3 个场景（双源一致/单源/互相矛盾）测试通过；原始来源引用保留。",
+      "safety": "不存全文；删除请求走 redaction。",
+      "budget": "CPU 3 小时；API 100 次；GPU 0 小时",
+      "reproduce": "python -m unittest discover -s tests -v"
+    },
+    {
+      "id": "0013",
+      "title": "参数更新（LoRA/QLoRA）与评测门槛",
+      "status": "todo",
+      "labels": ["task", "needs-design", "budget"],
+      "goal": "在预算和人工批准下做一次最小适配器训练，并证明指标下降会自动回滚。",
+      "acceptance": "更新前后对比表；跌破门槛自动回滚；评测器与回滚逻辑不可被更新流程修改。",
+      "safety": "需 GPU 资源与人工批准；无预算则不做（当前状态：blocked）。",
+      "budget": "CPU 2 小时；API 0 次；GPU 10 小时/月",
+      "reproduce": "python -m lab.cli run --steps 20 && python -m lab.cli verify"
+    },
+    {
+      "id": "0014",
+      "title": "时间层：clock / decay / TTL / 调度 / 窗口",
+      "status": "partial",
+      "labels": ["task", "good-first-issue"],
+      "goal": "统一时间源已实现；剩下的衰减、TTL、调度、窗口需要落地。",
+      "acceptance": "decay 与 TTL 有实现与测试；调度器跨 DST 不重复/不遗漏；窗口对齐 UTC 整点。",
+      "safety": "禁止业务代码直接调用系统时间。",
+      "budget": "CPU 3 小时；API 0 次；GPU 0 小时",
+      "reproduce": "python -m unittest discover -s tests -v"
+    },
+    {
+      "id": "0015",
+      "title": "逻辑层：依赖图 / 调用链 / 状态机 / 因果追踪",
+      "status": "done",
+      "labels": ["task"],
+      "goal": "状态机与重放校验已实现（lab/state.py）；依赖图与调用链在 logic/README.md。",
+      "acceptance": "非法转换被拒 + 手改 state.json 被检出（已有测试）。",
+      "safety": "状态机属 IMMUTABLE 层邻近区域，改动需评审。",
+      "budget": "CPU 0 小时（已完成）",
+      "reproduce": "python -m lab.cli verify"
+    },
+    {
+      "id": "0016",
+      "title": "空间层：资源布局 / 权限边界 / 沙箱隔离",
+      "status": "partial",
+      "labels": ["task", "security"],
+      "goal": "文档与 compose 已给出默认隔离；需要补真实的权限验证（非 root、只读挂载）。",
+      "acceptance": "容器内无法写工作区源码；无法访问宿主文件；访问被拒绝时有日志。",
+      "safety": "需要 Docker 环境；不得为本机开发便利放开限制。",
+      "budget": "CPU 2 小时；API 0 次；GPU 0 小时",
+      "reproduce": "docker compose config && docker compose run --rm lab python -m lab.cli doctor"
+    },
+    {
+      "id": "0017",
+      "title": "可视化：仪表盘 / 状态图 / 周报",
+      "status": "done",
+      "labels": ["task"],
+      "goal": "已实现 lab/viz.py 与 lab/report.py，自动生成 viz/status.md 与周报。",
+      "acceptance": "viz 生成含状态、预算、最近事件、Mermaid 状态图；report 含本周统计与风险。",
+      "safety": "生成物不含密钥；不渲染外部图片。",
+      "budget": "CPU 0 小时（已完成）",
+      "reproduce": "python -m lab.cli viz && python -m lab.cli report"
+    },
+    {
+      "id": "0018",
+      "title": "协作：角色 / 进步日志 / ADR / 30 分钟入门",
+      "status": "partial",
+      "labels": ["task", "good-first-issue"],
+      "goal": "角色与 ADR 模板已在 collab/README.md 与 GOVERNANCE.md；需要真实的第一条进步日志。",
+      "acceptance": "collab/ 下出现第一条真实日志（含'人学到了什么'）；ADR-0001 记录一个已做出的决定。",
+      "safety": "失败也要记录；不得美化。",
+      "budget": "CPU 1 小时；API 0 次；GPU 0 小时",
+      "reproduce": "查看 collab/README.md 的模板"
+    },
+    {
+      "id": "0019",
+      "title": "通知：分级触发 + /ack + 防疲劳 + 回应率",
+      "status": "todo",
+      "labels": ["task", "notify"],
+      "goal": "v0.1 只有账本 alert 事件；需要把分级、去重、ack、回应率统计落地。",
+      "acceptance": "高危 5 分钟内可见；24 小时去重；/ack 写入账本；回应率 <50% 触发复审提示。",
+      "safety": "不提交真实 webhook；渠道失败降级到终端并记录。",
+      "budget": "CPU 3 小时；API 0 次；GPU 0 小时",
+      "reproduce": "python -m lab.cli status"
+    }
+  ]
+}

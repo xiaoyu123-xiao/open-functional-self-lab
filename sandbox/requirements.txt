@@ -1,0 +1,13 @@
+# v0.1 核心：零依赖。这个文件保留为空是有意的——别往里加东西。
+#
+# 为什么空：`SECURITY.md` 第 3 节要求"依赖越少越好"，而本项目 90% 的用户是
+# 只有一台普通电脑的人。`pip install torch` 就要 2 GB，会把门槛推回"必须有 GPU"。
+#
+# 需要真实环境/向量记忆时，用可选组：
+#   pip install -e ".[env]"        # gymnasium
+#   pip install -e ".[memory]"     # chromadb
+#
+# 曾出现在旧方案里但已移除的包（原因见 docs/gap-analysis.md）：
+#   pyaif-toolkit / soul-agent     —— PyPI 上找不到对应可用包，clone 后必然 install 失败
+#   chromadb==1.5.9                —— 版本号不存在
+#   torch（作为必需项）             —— Python 3.13 上无对应 wheel，会直接装挂

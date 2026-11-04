@@ -1,0 +1,44 @@
+# 可选的容器化启动。v0.1 的正式入口是 `python -m lab.cli`；Docker 只是隔离运行的一种方式。
+# 语法已对齐 Compose Spec（无需 version: 字段）。
+# 校验（装了 Docker 才需要）：docker compose config
+services:
+  lab:
+    build:
+      context: .
+      dockerfile: sandbox/Dockerfile
+    image: ofsl/lab:0.1.0
+    working_dir: /workspace
+    # 默认离线：不挂网络。需要白名单检索时用 `docker compose --profile online up`。
+    network_mode: none
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    user: "1000:1000"
+    volumes:
+      # 只挂运行产物，源码进镜像；避免容器写回仓库。
+      - ./state:/workspace/state
+    tmpfs:
+      - /tmp:size=64m
+    environment:
+      - PYTHONUNBUFFERED=1
+    command: ["python", "-m", "lab.cli", "doctor"]
+    healthcheck:
+      test: ["CMD", "python", "-m", "lab.cli", "status"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+
+  # 可选：允许出网的检索代理（需人工批准后启用）。
+  # 只允许访问 SEARCH_ALLOWLIST 中的域名；不要把它接到主容器上做默认路径。
+  proxy:
+    image: ofsl/search-proxy:0.1.0
+    profiles: ["online"]
+    build:
+      context: .
+      dockerfile: sandbox/Dockerfile
+    network_mode: bridge
+    command: ["python", "-m", "lab.cli", "status"]
+    environment:
+      - SEARCH_ALLOWLIST=export.arxiv.org,api.openalex.org,api.semanticscholar.org

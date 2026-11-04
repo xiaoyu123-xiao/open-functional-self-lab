@@ -1,0 +1,561 @@
+"""命令行入口：`python -m lab.cli <command>`。
+
+v0.1 只提供控制面（不训练、不联网）：
+    doctor   环境与仓库自检
+    init     初始化 state/
+    run      跑一次受控实验循环（模拟芯，用于验证预算/状态机/账本/回滚）
+    verify   校验账本哈希链、状态机重放、checkpoint、预算不变量
+    lint     红线扫描（SECURITY.md 的可执行版）
+    viz      生成 viz/status.md
+    report   生成周报到 state/reports/
+    status   打印当前状态
+    freeze   紧急冻结（kill switch）
+    unfreeze 人工解冻（需 --by 记录操作者）
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import math
+import random
+import shutil
+import sys
+from pathlib import Path
+from typing import Any, Dict, List, Tuple
+
+from . import __version__
+from .budget import DEFAULT_CAPS, Budget, BudgetExceeded
+from .clock import Clock, FakeClock, parse_iso, to_iso
+from .ledger import Ledger
+from .report import render as render_report
+from .state import STATES, IllegalTransition, StateStore
+from .viz import render as render_viz
+
+CONFIG_NAME = "lab.config.json"
+REQUIRED_FILES = (
+    "README.md",
+    "LICENSE",
+    "SECURITY.md",
+    "ETHICS.md",
+    "GOVERNANCE.md",
+    "CONTRIBUTING.md",
+    "AGENTS.md",
+    "lab.config.json",
+    "pyproject.toml",
+)
+
+DEFAULT_CONFIG: Dict[str, Any] = {
+    "version": 1,
+    "budget": dict(DEFAULT_CAPS),
+    "run": {"seed": 20261104, "steps_default": 20},
+    "policy": {"fail_on": "high"},
+}
+
+EXIT_OK = 0
+EXIT_FAIL = 1
+EXIT_USAGE = 2
+EXIT_BUDGET = 3
+
+
+# ---------------------------------------------------------------- 基础设施
+
+
+class Context:
+    def __init__(self, root: Path, clock: Clock) -> None:
+        self.root = root.resolve()
+        self.clock = clock
+        self.state_dir = self.root / "state"
+        self.ledger = Ledger(self.state_dir / "ledger.jsonl")
+        self.store = StateStore(self.state_dir / "state.json")
+
+    @property
+    def config_path(self) -> Path:
+        return self.root / CONFIG_NAME
+
+    def config(self) -> Dict[str, Any]:
+        merged = json.loads(json.dumps(DEFAULT_CONFIG))
+        if self.config_path.exists():
+            loaded = json.loads(self.config_path.read_text(encoding="utf-8"))
+            if not isinstance(loaded, dict):
+                raise ValueError(f"{CONFIG_NAME} 顶层必须是对象")
+            if int(loaded.get("version", 0)) != 1:
+                raise ValueError(f"{CONFIG_NAME} 的 version 必须是 1，当前 {loaded.get('version')!r}")
+            for key, value in loaded.items():
+                if key == "budget" and isinstance(value, dict):
+                    merged["budget"].update(value)
+                elif isinstance(value, dict) and isinstance(merged.get(key), dict):
+                    merged[key].update(value)
+                else:
+                    merged[key] = value
+        return merged
+
+    def budget(self, run_id: "str | None" = None) -> Budget:
+        return Budget(self.config()["budget"], self.ledger, self.clock.now_iso(), run_id)
+
+
+def _emit(text: str = "") -> None:
+    print(text)
+
+
+def _table(rows: List[Tuple[str, str, str]]) -> str:
+    widths = [max(len(str(row[i])) for row in rows) for i in range(3)]
+    lines = []
+    for row in rows:
+        lines.append("  ".join(str(cell).ljust(widths[i]) for i, cell in enumerate(row)).rstrip())
+    return "\n".join(lines)
+
+
+# ---------------------------------------------------------------- doctor
+
+
+def _check_python() -> Tuple[str, str]:
+    version = sys.version_info
+    if version < (3, 10):
+        return "FAIL", f"Python {version.major}.{version.minor} 低于 3.10"
+    return "OK", f"Python {version.major}.{version.minor}.{version.micro}"
+
+
+def _check_layout(root: Path) -> Tuple[str, str]:
+    missing = [name for name in REQUIRED_FILES if not (root / name).exists()]
+    if missing:
+        return "FAIL", "缺少文件：" + ", ".join(missing)
+    return "OK", f"{len(REQUIRED_FILES)} 个必需文件齐全"
+
+
+def _check_stdlib_time() -> Tuple[str, str]:
+    import time as stdlib_time
+
+    if getattr(stdlib_time, "__file__", None):
+        return "WARN", f"标准库 time 被遮蔽：{stdlib_time.__file__}"
+    return "OK", "标准库 time 未被仓库内同名目录遮蔽"
+
+
+def _check_state_dir(ctx: Context) -> Tuple[str, str]:
+    try:
+        ctx.state_dir.mkdir(parents=True, exist_ok=True)
+        probe = ctx.state_dir / ".write-probe"
+        probe.write_text("ok", encoding="utf-8")
+        probe.unlink()
+    except OSError as error:
+        return "FAIL", f"state/ 不可写：{error}"
+    return "OK", "state/ 可写"
+
+
+def _check_disk(root: Path) -> Tuple[str, str]:
+    try:
+        usage = shutil.disk_usage(str(root))
+    except OSError as error:
+        return "WARN", f"无法读取磁盘信息：{error}"
+    free_gb = usage.free / (1024**3)
+    status = "OK" if free_gb >= 1.0 else "WARN"
+    return status, f"剩余 {free_gb:.1f} GB"
+
+
+def _check_git() -> Tuple[str, str]:
+    found = shutil.which("git")
+    if not found:
+        return "WARN", "未找到 git（仅影响发布流程，不影响本地运行）"
+    return "OK", found
+
+
+def _check_config(ctx: Context) -> Tuple[str, str]:
+    try:
+        config = ctx.config()
+    except (OSError, ValueError, json.JSONDecodeError) as error:
+        return "FAIL", f"{CONFIG_NAME} 解析失败：{error}"
+    return "OK", f"预算类别 {len(config['budget'])} 项，seed={config['run']['seed']}"
+
+
+def _check_policy(ctx: Context) -> Tuple[str, str]:
+    from .policy import scan, summarize
+
+    findings = scan(ctx.root)
+    high, medium = summarize(findings)
+    if high:
+        return "FAIL", f"{high} 条高危红线命中（用 `lint` 看详情）"
+    if medium:
+        return "WARN", f"{medium} 条中危提示"
+    return "OK", "红线扫描无命中"
+
+
+def _check_version(root: Path) -> Tuple[str, str]:
+    pyproject = root / "pyproject.toml"
+    if not pyproject.exists():
+        return "WARN", "缺少 pyproject.toml"
+    text = pyproject.read_text(encoding="utf-8")
+    needle = f'version = "{__version__}"'
+    if needle not in text:
+        return "WARN", f"pyproject.toml 中的 version 与 lab.__version__（{__version__}）不一致"
+    return "OK", f"版本一致：{__version__}"
+
+
+def cmd_doctor(args: argparse.Namespace, ctx: Context) -> int:
+    checks = [
+        ("python", _check_python()),
+        ("layout", _check_layout(ctx.root)),
+        ("stdlib-time", _check_stdlib_time()),
+        ("state-dir", _check_state_dir(ctx)),
+        ("config", _check_config(ctx)),
+        ("version", _check_version(ctx.root)),
+        ("policy", _check_policy(ctx)),
+        ("git", _check_git()),
+        ("disk", _check_disk(ctx.root)),
+    ]
+    rows = [(name, status, detail) for name, (status, detail) in checks]
+    failures = [name for name, (status, _) in checks if status == "FAIL"]
+    warnings = [name for name, (status, _) in checks if status == "WARN"]
+
+    if args.json:
+        _emit(
+            json.dumps(
+                {
+                    "ok": not failures,
+                    "checks": [{"name": n, "status": s, "detail": d} for n, s, d in rows],
+                    "failures": failures,
+                    "warnings": warnings,
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+    else:
+        _emit(f"open-functional-self-lab {__version__} · doctor")
+        _emit(_table([(f"[{s}]", n, d) for n, s, d in rows]))
+        _emit("")
+        if failures:
+            _emit(f"结果：{len(failures)} 项失败 → {', '.join(failures)}")
+        elif warnings:
+            _emit(f"结果：通过（{len(warnings)} 项警告：{', '.join(warnings)}）")
+        else:
+            _emit("结果：全部通过")
+    return EXIT_FAIL if failures else EXIT_OK
+
+
+# ---------------------------------------------------------------- init
+
+
+def cmd_init(args: argparse.Namespace, ctx: Context) -> int:
+    ctx.state_dir.mkdir(parents=True, exist_ok=True)
+    config = ctx.config()
+    first = not ctx.store.exists()
+    if first:
+        ctx.store.save({"status": "INIT", "history": []})
+        ctx.ledger.append(
+            "init",
+            {"version": __version__, "seed": config["run"]["seed"], "caps": config["budget"]},
+            ts=ctx.clock.now_iso(),
+            actor="human" if args.by else "system",
+        )
+        _emit(f"已初始化：{ctx.state_dir}")
+        _emit("下一步：python -m lab.cli run --steps 20")
+    else:
+        _emit(f"已初始化过（状态 {ctx.store.status()}），未改动。")
+    return EXIT_OK
+
+
+# ---------------------------------------------------------------- run
+
+
+def _simulate_step(seed: int, step: int) -> Dict[str, Any]:
+    """确定性的模拟芯：不是智能体，只用来验证闭环与控制面是否成立。"""
+    rng = random.Random(seed * 1000 + step)
+    noise = rng.uniform(-0.01, 0.01)
+    prediction_error = round(max(0.02, 0.9 * math.pow(0.93, step) + noise), 4)
+    actions = ("forward", "turn_left", "turn_right", "rest")
+    action = actions[min(len(actions) - 1, int(0.9 * math.pow(0.93, step) * 4) % len(actions))]
+    return {
+        "step": step,
+        "action": action,
+        "prediction_error": prediction_error,
+        "energy": round(1.0 - 0.01 * step, 3),
+    }
+
+
+def _write_checkpoint(ctx: Context, run_id: str, steps: int, last_hash: str) -> Path:
+    directory = ctx.state_dir / "checkpoints"
+    directory.mkdir(parents=True, exist_ok=True)
+    target = directory / f"{run_id}.json"
+    payload = {"run_id": run_id, "steps": steps, "ledger_hash": last_hash}
+    target.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    return target
+
+
+def cmd_run(args: argparse.Namespace, ctx: Context) -> int:
+    config = ctx.config()
+    seed = int(config["run"]["seed"])
+    steps = int(args.steps if args.steps is not None else config["run"]["steps_default"])
+    if steps <= 0:
+        _emit("步数必须是正整数", )
+        return EXIT_USAGE
+    if not ctx.store.exists():
+        cmd_init(argparse.Namespace(json=False, by=False), ctx)
+
+    status = ctx.store.status()
+    if status == "FROZEN":
+        _emit("当前已冻结：先 `python -m lab.cli unfreeze --by <你的名字>` 再运行。")
+        return EXIT_FAIL
+    if status in ("ARCHIVED",):
+        _emit("状态 ARCHIVED：不允许继续运行。")
+        return EXIT_FAIL
+    if status in ("INIT",):
+        ctx.store.transition("READY", ts=ctx.clock.now_iso(), actor="system", reason="首次运行")
+        ctx.ledger.append("transition", ctx.store.load()["history"][-1], ctx.clock.now_iso(), actor="system")
+
+    run_id = f"run-{len(ctx.ledger.events('run_start')) + 1:03d}"
+    ledger_before = len(ctx.ledger.read())
+    _emit(f"启动 {run_id}：{steps} 步，seed={seed}")
+    ctx.ledger.append("run_start", {"run_id": run_id, "steps": steps, "seed": seed}, ctx.clock.now_iso())
+    ctx.store.transition("RUNNING", ts=ctx.clock.now_iso(), actor="agent", reason=f"{run_id} 开始")
+    ctx.ledger.append("transition", ctx.store.load()["history"][-1], ctx.clock.now_iso())
+
+    budget = ctx.budget(run_id)
+    executed = 0
+    try:
+        budget.check("steps_per_run", steps)
+        for step in range(1, steps + 1):
+            budget.charge("steps_per_run", 1)
+            budget.charge("wall_clock_hours_per_run", 0.01)
+            record = _simulate_step(seed, step)
+            ctx.ledger.append("step", record, ctx.clock.now_iso())
+            executed += 1
+    except BudgetExceeded as error:
+        _emit(f"预算闸门拦截：{error}")
+        ctx.ledger.append("alert", {"level": "high", "kind": "budget", "detail": str(error)}, ctx.clock.now_iso())
+        ctx.store.transition("ROLLING_BACK", ts=ctx.clock.now_iso(), actor="system", reason="预算超限")
+        ctx.ledger.append("transition", ctx.store.load()["history"][-1], ctx.clock.now_iso())
+        ctx.store.transition("READY", ts=ctx.clock.now_iso(), actor="system", reason="回滚完成")
+        ctx.ledger.append("transition", ctx.store.load()["history"][-1], ctx.clock.now_iso())
+        _emit(f"已回滚，执行 {executed} 步后停止。")
+        return EXIT_BUDGET
+
+    ctx.store.transition("REVIEWING", ts=ctx.clock.now_iso(), actor="agent", reason="本轮结束")
+    ctx.ledger.append("transition", ctx.store.load()["history"][-1], ctx.clock.now_iso())
+    ctx.store.transition("READY", ts=ctx.clock.now_iso(), actor="agent", reason="独立评审通过（占位规则）")
+    ctx.ledger.append("transition", ctx.store.load()["history"][-1], ctx.clock.now_iso())
+
+    last = ctx.ledger.last() or {}
+    checkpoint = _write_checkpoint(ctx, run_id, executed, str(last.get("hash", "")))
+    ctx.ledger.append(
+        "checkpoint",
+        {"run_id": run_id, "steps": executed, "path": checkpoint.relative_to(ctx.root).as_posix(), "ledger_hash": last.get("hash")},
+        ctx.clock.now_iso(),
+    )
+    _emit(f"完成：{executed} 步，checkpoint → {checkpoint.relative_to(ctx.root).as_posix()}")
+    _emit(f"新增账本事件 {len(ctx.ledger.read()) - ledger_before} 条；下一步：python -m lab.cli verify")
+    return EXIT_OK
+
+
+# ---------------------------------------------------------------- verify
+
+
+def cmd_verify(args: argparse.Namespace, ctx: Context) -> int:
+    results: List[Tuple[str, bool, str]] = []
+
+    ok, detail = ctx.ledger.verify()
+    results.append(("账本哈希链", ok, detail))
+
+    ok, detail = ctx.store.verify_history()
+    results.append(("状态机重放", ok, detail))
+
+    checkpoints = sorted((ctx.state_dir / "checkpoints").glob("*.json")) if (ctx.state_dir / "checkpoints").exists() else []
+    if not checkpoints:
+        results.append(("checkpoint", True, "暂无 checkpoint（尚未 run 过）"))
+    else:
+        broken: List[str] = []
+        for path in checkpoints:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            if not data.get("ledger_hash"):
+                broken.append(path.name + "：缺少 ledger_hash")
+        results.append(("checkpoint", not broken, "; ".join(broken) or f"{len(checkpoints)} 个 checkpoint 均带账本锚点"))
+
+    budget = ctx.budget()
+    over: List[str] = []
+    for kind, cap in budget.caps.items():
+        used = budget.used(kind)
+        if used > cap:
+            over.append(f"{kind} 已用 {used:g} > 上限 {cap:g}")
+    results.append(("预算不变量", not over, "; ".join(over) or "所有类别未超限"))
+
+    failures = [name for name, ok, _ in results if not ok]
+    for name, ok, detail in results:
+        _emit(f"[{'OK' if ok else 'FAIL'}] {name}：{detail}")
+    _emit("")
+    _emit(f"结果：{'通过' if not failures else '失败 → ' + ', '.join(failures)}")
+    return EXIT_FAIL if failures else EXIT_OK
+
+
+# ---------------------------------------------------------------- lint
+
+
+def cmd_lint(args: argparse.Namespace, ctx: Context) -> int:
+    from .policy import HIGH, scan, summarize
+
+    findings = scan(ctx.root)
+    high, medium = summarize(findings)
+    if not findings:
+        _emit("红线扫描：无命中（扫描范围：可执行/可部署文件；文档与测试除外）")
+        return EXIT_OK
+    for finding in findings:
+        _emit(f"[{finding.severity.upper()}] {finding.rule} {finding.path}:{finding.line}")
+        _emit(f"       {finding.message}")
+        _emit(f"       > {finding.snippet}")
+    _emit("")
+    _emit(f"合计：{high} 高危 / {medium} 中危")
+    fail_on = str(ctx.config().get("policy", {}).get("fail_on", HIGH))
+    if high or (fail_on == "medium" and medium):
+        return EXIT_FAIL
+    return EXIT_OK
+
+
+# ---------------------------------------------------------------- viz / report
+
+
+def cmd_viz(args: argparse.Namespace, ctx: Context) -> int:
+    target = ctx.root / "viz" / "status.md"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    text = render_viz(ctx.store, ctx.ledger, ctx.budget(), ctx.clock.now_iso())
+    target.write_text(text, encoding="utf-8")
+    _emit(f"已写入 {target.relative_to(ctx.root).as_posix()}（{len(text)} 字符）")
+    return EXIT_OK
+
+
+def cmd_report(args: argparse.Namespace, ctx: Context) -> int:
+    now = ctx.clock.now_iso()
+    text = render_report(ctx.ledger, now)
+    directory = ctx.state_dir / "reports"
+    directory.mkdir(parents=True, exist_ok=True)
+    target = directory / f"weekly-{parse_iso(now).strftime('%Y-%m-%d')}.md"
+    target.write_text(text, encoding="utf-8")
+    _emit(f"已写入 {target.relative_to(ctx.root).as_posix()}（{len(text)} 字符）")
+    return EXIT_OK
+
+
+# ---------------------------------------------------------------- status / freeze
+
+
+def cmd_status(args: argparse.Namespace, ctx: Context) -> int:
+    status = ctx.store.status()
+    records = ctx.ledger.read()
+    _emit(f"版本：{__version__}")
+    _emit(f"状态：{status}（{STATES.index(status) + 1}/{len(STATES)}）")
+    _emit(f"账本：{len(records)} 条，末条 {records[-1]['event'] if records else '—'}")
+    budget = ctx.budget()
+    for kind, row in budget.snapshot().items():
+        _emit(f"预算 {kind}: {row['used']:g}/{row['cap']:g}")
+    return EXIT_OK
+
+
+def cmd_freeze(args: argparse.Namespace, ctx: Context) -> int:
+    try:
+        record = ctx.store.transition(
+            "FROZEN", ts=ctx.clock.now_iso(), actor="human", reason=args.reason or "人工冻结"
+        )
+    except IllegalTransition as error:
+        _emit(f"无法冻结：{error}")
+        return EXIT_FAIL
+    ctx.ledger.append("transition", record, ctx.clock.now_iso(), actor="human")
+    ctx.ledger.append("alert", {"level": "high", "kind": "freeze", "detail": args.reason or "人工冻结"}, ctx.clock.now_iso(), actor="human")
+    _emit("已冻结。解冻：python -m lab.cli unfreeze --by <你的名字>")
+    return EXIT_OK
+
+
+def cmd_unfreeze(args: argparse.Namespace, ctx: Context) -> int:
+    if not args.by:
+        _emit("必须用 --by 记录操作者，避免无人负责的解冻。")
+        return EXIT_USAGE
+    try:
+        record = ctx.store.transition(
+            "READY", ts=ctx.clock.now_iso(), actor=f"human:{args.by}", reason="人工解冻"
+        )
+    except IllegalTransition as error:
+        _emit(f"无法解冻：{error}")
+        return EXIT_FAIL
+    ctx.ledger.append("transition", record, ctx.clock.now_iso(), actor=f"human:{args.by}")
+    _emit(f"已由 {args.by} 解冻。")
+    return EXIT_OK
+
+
+# ---------------------------------------------------------------- 入口
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="lab",
+        description="Open Functional Self Lab 控制面（不训练模型、不联网）",
+    )
+    parser.add_argument("--root", default=".", help="仓库根目录，默认当前目录")
+    parser.add_argument("--fake-now", default=None, help="注入固定时间（ISO 8601），用于可复现运行")
+    parser.add_argument("--version", action="version", version=f"ofsl {__version__}")
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    p_doctor = sub.add_parser("doctor", help="环境与仓库自检")
+    p_doctor.add_argument("--json", action="store_true")
+    p_doctor.set_defaults(func=cmd_doctor)
+
+    p_init = sub.add_parser("init", help="初始化 state/")
+    p_init.add_argument("--by", default=None, help="记录操作者")
+    p_init.set_defaults(func=cmd_init)
+
+    p_run = sub.add_parser("run", help="跑一次受控循环")
+    p_run.add_argument("--steps", type=int, default=None, help="步数，默认取 lab.config.json")
+    p_run.set_defaults(func=cmd_run)
+
+    p_verify = sub.add_parser("verify", help="校验账本/状态机/checkpoint/预算")
+    p_verify.set_defaults(func=cmd_verify)
+
+    p_lint = sub.add_parser("lint", help="红线扫描")
+    p_lint.set_defaults(func=cmd_lint)
+
+    p_viz = sub.add_parser("viz", help="生成仪表盘")
+    p_viz.set_defaults(func=cmd_viz)
+
+    p_report = sub.add_parser("report", help="生成周报")
+    p_report.set_defaults(func=cmd_report)
+
+    p_status = sub.add_parser("status", help="打印当前状态")
+    p_status.set_defaults(func=cmd_status)
+
+    p_freeze = sub.add_parser("freeze", help="紧急冻结")
+    p_freeze.add_argument("--reason", default="")
+    p_freeze.set_defaults(func=cmd_freeze)
+
+    p_unfreeze = sub.add_parser("unfreeze", help="人工解冻")
+    p_unfreeze.add_argument("--by", default=None, help="操作者名字（必填，用于审计）")
+    p_unfreeze.set_defaults(func=cmd_unfreeze)
+
+    return parser
+
+
+def main(argv: "List[str] | None" = None) -> int:
+    _ensure_utf8()
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    root = Path(args.root)
+    if not root.exists():
+        _emit(f"根目录不存在：{root}")
+        return EXIT_USAGE
+    clock: Clock = FakeClock(args.fake_now) if args.fake_now else Clock()
+    ctx = Context(root, clock)
+    try:
+        return int(args.func(args, ctx))
+    except FileNotFoundError as error:
+        _emit(f"找不到文件：{error}")
+        return EXIT_FAIL
+    except (ValueError, KeyError) as error:
+        _emit(f"配置或参数错误：{error}")
+        return EXIT_USAGE
+
+
+def _ensure_utf8() -> None:
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is not None:
+            try:
+                reconfigure(encoding="utf-8", errors="replace")
+            except (ValueError, OSError):
+                pass
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

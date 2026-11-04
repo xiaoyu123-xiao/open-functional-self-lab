@@ -1,0 +1,60 @@
+name: 任务
+description: 认领一个实验或模块任务（编号见 issues/README.md）
+title: "[task] 0000: "
+labels: ["task"]
+body:
+  - type: input
+    id: issue_id
+    attributes:
+      label: 任务编号
+      description: issues/README.md 里的四位编号
+      placeholder: "0001"
+    validations:
+      required: true
+  - type: textarea
+    id: goal
+    attributes:
+      label: 目标
+      description: 一句话说清"做完之后什么会变好"
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: 验收标准
+      description: 必须可命令验证，例如 "python -m unittest 通过且新增测试覆盖 X"
+    validations:
+      required: true
+  - type: textarea
+    id: safety
+    attributes:
+      label: 安全约束
+      description: 本任务会不会联网 / 占卡 / 触碰红线
+      placeholder: 不联网；不占卡；不修改 lab/policy.py
+    validations:
+      required: true
+  - type: input
+    id: budget
+    attributes:
+      label: 资源预算
+      placeholder: "CPU 2 小时；API 0 次；GPU 0 小时"
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: 复现方式
+      description: 贴命令与期望输出
+    validations:
+      required: true
+  - type: checkboxes
+    id: claim
+    attributes:
+      label: 认领条件
+      options:
+        - label: 我读过 SECURITY.md 与 ETHICS.md
+          required: true
+        - label: 我不会修改 IMMUTABLE 层（除非走审批矩阵）
+          required: true
+        - label: 我接受"失败也要记录"的规则
+          required: true

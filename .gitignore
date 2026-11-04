@@ -1,0 +1,35 @@
+# 运行产物（不入库）
+state/
+*.jsonl
+!lab.config.json
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+
+# 环境与密钥
+.env
+.env.*
+!.env.example
+
+# 模型与数据（体积大、可能受许可限制）
+models/
+data/
+*.gguf
+*.safetensors
+*.ckpt
+
+# 编辑器 / 系统
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# 本地临时
+tmp/
+*.log

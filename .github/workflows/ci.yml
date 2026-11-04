@@ -1,0 +1,59 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: py${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: 环境与仓库自检
+        run: python -m lab.cli doctor
+
+      - name: 单元测试
+        run: python -m unittest discover -s tests -v
+
+      - name: 红线扫描
+        run: python -m lab.cli lint
+
+      - name: 端到端（init → run → verify → viz → report）
+        run: |
+          python -m lab.cli init
+          python -m lab.cli run --steps 20
+          python -m lab.cli verify
+          python -m lab.cli viz
+          python -m lab.cli report
+
+      - name: 预算闸门回归（必须返回 3）
+        run: python scripts/budget_regression.py
+
+      - name: 上传仪表盘
+        if: matrix.python-version == '3.12'
+        uses: actions/upload-artifact@v4
+        with:
+          name: dashboard
+          path: |
+            viz/status.md
+            state/reports/*.md
+          if-no-files-found: warn

@@ -1,0 +1,56 @@
+name: 缺陷
+description: 报告能复现的问题（安全问题请走 Security 标签页，不要在这里公开）
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **安全漏洞请勿在此提交**，请用仓库 Security 标签页的 *Report a vulnerability*。
+  - type: textarea
+    id: what
+    attributes:
+      label: 现象
+      description: 实际发生了什么
+    validations:
+      required: true
+  - type: textarea
+    id: expect
+    attributes:
+      label: 期望
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: 复现步骤
+      description: 贴命令与完整输出（含退出码）
+      render: shell
+    validations:
+      required: true
+  - type: dropdown
+    id: env
+    attributes:
+      label: 环境
+      options:
+        - Windows
+        - macOS
+        - Linux
+        - Docker
+        - CI（GitHub Actions）
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: 版本
+      description: python -m lab.cli --version 的输出
+      placeholder: "ofsl 0.1.0"
+    validations:
+      required: true
+  - type: checkboxes
+    id: redline
+    attributes:
+      label: 是否涉及安全红线
+      options:
+        - label: 涉及（自复制/提权/隐藏行为/删日志）——请改用私下渠道报告

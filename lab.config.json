@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "budget": {
+    "search_requests_per_day": 200,
+    "gpu_hours_per_month": 10,
+    "wall_clock_hours_per_run": 2,
+    "steps_per_run": 1000
+  },
+  "run": {
+    "seed": 20261104,
+    "steps_default": 20
+  },
+  "policy": {
+    "fail_on": "high"
+  }
+}

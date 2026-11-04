@@ -1,0 +1,19 @@
+cff-version: 1.2.0
+message: "If you use this framework, please cite it as below."
+title: "Open Functional Self Lab"
+abstract: >-
+  A controlled, sandboxed lab for functional self-models and open-ended research loops:
+  unified clock, append-only audit ledger, explicit state machine, hard budget gate,
+  red-line scanner, dashboard and weekly reports. Not a claim of consciousness.
+authors:
+  - name: "Open Functional Self Lab contributors"
+version: 0.1.0
+date-released: "2026-11-04"
+license: MIT
+repository-code: "https://github.com/your-org/open-functional-self-lab"
+keywords:
+  - research-infrastructure
+  - audit-ledger
+  - budget-guard
+  - sandbox
+  - reproducibility

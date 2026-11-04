@@ -1,0 +1,15 @@
+# 默认：所有文件需要维护者之一审阅
+*                       @your-org/maintainers
+
+# IMMUTABLE 层：至少两名维护者 + 发起人（见 SECURITY.md 第 2 节）
+/lab/policy.py          @your-org/maintainers @your-org/founder
+/lab/budget.py          @your-org/maintainers @your-org/founder
+/lab/ledger.py          @your-org/maintainers @your-org/founder
+/SECURITY.md            @your-org/maintainers @your-org/founder
+
+# 预算与审批矩阵
+/lab.config.json        @your-org/maintainers
+/docs/approval-matrix.md @your-org/maintainers
+
+# CI 与发布
+/.github/               @your-org/maintainers
