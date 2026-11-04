@@ -19,8 +19,10 @@ if str(REPO) not in sys.path:
 
 from lab import __version__  # noqa: E402
 from lab.budget import Budget, BudgetExceeded  # noqa: E402
+from lab.cli import _episode_records  # noqa: F401  私有函数，测试里用于确定性断言
 from lab.cli import main as cli_main  # noqa: E402
 from lab.clock import Clock, FakeClock, elapsed_seconds, parse_iso, to_iso  # noqa: E402
+from lab.env import GridWorld, greedy_action  # noqa: E402
 from lab.ledger import Ledger  # noqa: E402
 from lab.policy import scan, scan_text, summarize  # noqa: E402
 from lab.state import IllegalTransition, StateStore  # noqa: E402
@@ -218,6 +220,75 @@ class CliTests(unittest.TestCase):
     def test_bad_config_is_rejected(self) -> None:
         (self.root / "lab.config.json").write_text(json.dumps({"version": 7}), encoding="utf-8")
         self._run("init", expect=2)
+
+
+class EnvTests(unittest.TestCase):
+    """Issue 0001：8×8 网格环境。"""
+
+    def test_episode_is_deterministic(self) -> None:
+        first = _episode_records(20261104, 15)
+        second = _episode_records(20261104, 15)
+        self.assertEqual(first, second)
+        self.assertEqual(len(first), 15)
+
+    def test_different_seed_differs(self) -> None:
+        self.assertNotEqual(_episode_records(1, 10), _episode_records(2, 10))
+
+    def test_wall_blocks_movement(self) -> None:
+        env = GridWorld(11)
+        wall = sorted(env.walls)[0]
+        # 站在墙左边（能站的话），向右撞墙
+        env.agent = (wall[0] - 1, wall[1])
+        if env.agent[0] < 0 or env.agent in env.walls:
+            env.agent = (wall[0] + 1, wall[1])
+            action = "left"
+        else:
+            action = "right"
+        before = env.agent
+        outcome = env.step(action)
+        self.assertTrue(outcome["blocked"])
+        self.assertEqual(env.agent, before)
+
+    def test_energy_decreases_when_no_food(self) -> None:
+        env = GridWorld(5)
+        env.food = set()
+        start_energy = env.energy
+        for _ in range(40):          # 每步 -0.02，40 步后能量 0.2，低于 0.30 的舒适区
+            env.step("rest")
+        self.assertLess(env.energy, start_energy)
+        self.assertGreater(env.homeostatic_error(), 0.0)
+
+    def test_eating_restores_energy(self) -> None:
+        env = GridWorld(5)
+        target = sorted(env.food)[0]
+        env.agent = target
+        env.energy = 0.5
+        outcome = env.step("rest")
+        self.assertTrue(outcome["ate"])
+        self.assertGreater(env.energy, 0.5)
+
+    def test_hazard_accumulates_damage(self) -> None:
+        env = GridWorld(5)
+        env.agent = sorted(env.hazards)[0]
+        for _ in range(3):           # 每次 +0.25；超过 0.50 才产生稳态误差
+            outcome = env.step("rest")
+            self.assertTrue(outcome["hurt"])
+        self.assertGreater(env.damage, 0.5)
+        self.assertGreater(env.homeostatic_error(), 0.0)
+
+    def test_baseline_reaches_food(self) -> None:
+        env = GridWorld(20261104)
+        before = len(env.food)
+        for _ in range(20):
+            env.step(greedy_action(env))
+        self.assertLess(len(env.food), before, "20 步内基线策略至少要吃到一份食物")
+
+    def test_records_carry_real_state(self) -> None:
+        record = _episode_records(7, 3)[-1]
+        for key in ("step", "action", "x", "y", "energy", "damage", "homeostatic_error", "prediction_error"):
+            self.assertIn(key, record)
+        self.assertGreaterEqual(record["energy"], 0.0)
+        self.assertLessEqual(record["energy"], 1.0)
 
 
 class SubprocessSmokeTests(unittest.TestCase):

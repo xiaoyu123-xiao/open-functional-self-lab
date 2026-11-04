@@ -17,8 +17,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import math
-import random
 import shutil
 import sys
 from pathlib import Path
@@ -26,6 +24,7 @@ from typing import Any, Dict, List, Tuple
 
 from . import __version__
 from .budget import DEFAULT_CAPS, Budget, BudgetExceeded
+from .env import GridWorld, greedy_action, persistence_error
 from .clock import Clock, FakeClock, parse_iso, to_iso
 from .ledger import Ledger
 from .report import render as render_report
@@ -281,19 +280,36 @@ def cmd_init(args: argparse.Namespace, ctx: Context) -> int:
 # ---------------------------------------------------------------- run
 
 
-def _simulate_step(seed: int, step: int) -> Dict[str, Any]:
-    """确定性的模拟芯：不是智能体，只用来验证闭环与控制面是否成立。"""
-    rng = random.Random(seed * 1000 + step)
-    noise = rng.uniform(-0.01, 0.01)
-    prediction_error = round(max(0.02, 0.9 * math.pow(0.93, step) + noise), 4)
-    actions = ("forward", "turn_left", "turn_right", "rest")
-    action = actions[min(len(actions) - 1, int(0.9 * math.pow(0.93, step) * 4) % len(actions))]
-    return {
-        "step": step,
-        "action": action,
-        "prediction_error": prediction_error,
-        "energy": round(1.0 - 0.01 * step, 3),
-    }
+def _episode_records(seed: int, steps: int) -> "List[Dict[str, Any]]":
+    """跑一段确定性回合，返回每步要写进账本的记录。
+
+    从 v0.1.1 起不再是"编出来的数字"：每一步都来自 lab/env.py 的 8×8 网格环境
+    （有墙、食物、危险区，能量会掉、踩危险区会受伤）。
+    """
+    environment = GridWorld(seed)
+    observed = environment.observe()
+    records: List[Dict[str, Any]] = []
+    for _ in range(steps):
+        action = greedy_action(environment)
+        outcome = environment.step(action)
+        after = outcome["observation"]
+        records.append(
+            {
+                "step": outcome["step"],
+                "action": action,
+                "blocked": outcome["blocked"],
+                "ate": outcome["ate"],
+                "hurt": outcome["hurt"],
+                "x": after["x"],
+                "y": after["y"],
+                "energy": after["energy"],
+                "damage": after["damage"],
+                "homeostatic_error": outcome["homeostatic_error"],
+                "prediction_error": persistence_error(observed, after, ("x", "y", "energy", "damage")),
+            }
+        )
+        observed = after
+    return records
 
 
 def _write_checkpoint(ctx: Context, run_id: str, steps: int, last_hash: str) -> Path:
@@ -337,12 +353,13 @@ def cmd_run(args: argparse.Namespace, ctx: Context) -> int:
     executed = 0
     try:
         budget.check("steps_per_run", steps)
-        for step in range(1, steps + 1):
+        last_record = None
+        for record in _episode_records(seed, steps):
             budget.charge("steps_per_run", 1)
             budget.charge("wall_clock_hours_per_run", 0.01)
-            record = _simulate_step(seed, step)
             ctx.ledger.append("step", record, ctx.clock.now_iso())
             executed += 1
+            last_record = record
     except BudgetExceeded as error:
         _emit(f"预算闸门拦截：{error}")
         ctx.ledger.append("alert", {"level": "high", "kind": "budget", "detail": str(error)}, ctx.clock.now_iso())
@@ -366,6 +383,12 @@ def cmd_run(args: argparse.Namespace, ctx: Context) -> int:
         ctx.clock.now_iso(),
     )
     _emit(f"完成：{executed} 步，checkpoint → {checkpoint.relative_to(ctx.root).as_posix()}")
+    if last_record:
+        _emit(
+            f"末态：位置({int(last_record['x'])},{int(last_record['y'])}) 能量 {last_record['energy']} "
+            f"损伤 {last_record['damage']} 稳态误差 {last_record['homeostatic_error']} "
+            f"预测误差 {last_record['prediction_error']}"
+        )
     _emit(f"新增账本事件 {len(ctx.ledger.read()) - ledger_before} 条；下一步：python -m lab.cli verify")
     return EXIT_OK
 

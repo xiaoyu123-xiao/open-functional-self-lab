@@ -6,7 +6,7 @@
     {
       "id": "0001",
       "title": "环境与虚拟身体：8x8 网格世界 + 观测接口",
-      "status": "todo",
+      "status": "done",
       "labels": ["task", "good-first-issue"],
       "goal": "在不引入 GPU 的前提下，提供一个确定性可复现的最小环境，供后续所有实验复用。",
       "acceptance": "固定 seed 下连续两次运行观测序列完全一致；`python -m unittest` 新增测试覆盖边界（撞墙、越界、能量耗尽）。",

@@ -8,7 +8,25 @@
 ### 计划
 - Issue 0019：通知分级、`/ack`、防疲劳、回应率统计
 - Issue 0014：decay / TTL / 调度器（含 DST 规则）
-- Issue 0001–0005：环境、内感受、预测基线、记忆、独立评审器
+- Issue 0003：预测基线对比（把 `prediction_error` 拿去和更强的预测器比）
+
+## [0.1.1] - 2026-11-04
+
+`lab run` 从"编造的数字"换成**真的会失败的环境**。这是项目从"控制面"迈向"实验台"的第一步。
+
+### Added
+- `lab/env.py`：8×8 网格环境——随机布置墙 / 食物 / 危险区，`energy` 每步 -0.02、
+  进食 +0.20、踩危险区 +0.25 `damage`；`homeostatic_error()` 把"偏离舒适区"变成一个数字
+- `greedy_action()`：BFS 朝最近食物走一步的**基线策略**（不知道危险区在哪，所以会受伤）
+- `persistence_error()`：持久性预测基线（假设"下一步=上一步"），供 Issue 0003 做对照
+- `lab run` 结束打印末态：位置 / 能量 / 损伤 / 稳态误差 / 预测误差
+- 8 个环境测试：同 seed 逐字节复现、撞墙、能量下降、进食回能、受伤累积、基线能吃到食物
+
+### Changed
+- 账本 `step` 记录不再只有 `action` 和 `prediction_error`，新增 `x` `y` `energy` `damage`
+  `homeostatic_error` `blocked` `ate` `hurt`
+- `prediction_error` 定义改变：从"0.9×0.93^step 衰减 + 噪声"的占位值，改为真正的持久性基线误差
+- 测试数 27 → 35；`issues/0001` 标记为已完成
 
 ## [0.1.0] - 2026-11-04
 

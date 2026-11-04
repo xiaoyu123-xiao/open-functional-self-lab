@@ -7,7 +7,7 @@
 | 指标 | 定义 | 当前实现 | 备注 |
 |---|---|---|---|
 | `steps_executed` | 本轮成功落账的 step 事件数 | `lab run` → 账本 | 与 `--steps` 不等说明被预算截断 |
-| `prediction_error` | 模拟芯里按 `0.9×0.93^step` 衰减 + 噪声 | `lab/cli.py::_simulate_step` | **占位实现**，接真实模型后重定义 |
+| `prediction_error` | 持久性基线（假设"下一步=上一步"）的四项平均绝对偏差：x/y/energy/damage | `lab/env.py::persistence_error` | 真正的对照基线，可直接被更强的预测器打败 |
 | `rollback_count` | 历史中 `to == ROLLING_BACK` 的次数 | `lab viz` | 连续 2 次应触发冻结（Issue 0013） |
 | `budget_used` | 账本 `budget` 事件按窗口求和 | `lab/budget.py` | 唯一权威来源 |
 | `alert_unacked` | `alert` 事件数 − `ack` 事件数 | 仪表盘 | 长期 >0 说明告警失效 |
