@@ -98,13 +98,12 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 Write-Host ""
-Write-Host "完成。接下来："
-if ($remote -like "http*") {
-    Write-Host "  1. 打开 $($remote -replace '\.git$','')/actions  确认 4 个 job 全绿"
-}
-else {
-    Write-Host "  1. 打开仓库页的 Actions 确认 4 个 job 全绿"
-}
-Write-Host "  2. Settings → Branches → 保护 main（1 个 approve + status checks）"
-Write-Host "  3. Releases → Draft a new release → 选 $tag"
-Write-Host "  4. python scripts/seed_issues.py   # 建 19 个 Issue（需 gh）"
+Write-Host "完成。main → $remote"
+Write-Host "tag: $tag"
+Write-Host ""
+Write-Host "还剩的事项（做过的可忽略，清单见 docs/publish-first-time.md）："
+Write-Host "  - 看 CI：仓库页 Actions，确认 4 个 job 全绿"
+Write-Host "  - 发版本：Releases → Draft a new release → 选 $tag"
+Write-Host "  - 建任务：python scripts/seed_issues.py（需 gh）"
+Write-Host "  - 填简介：仓库首页右侧 About 的齿轮"
+Write-Host "  - 分支保护：Settings → Branches（管理员可绕过时不会挡住发布）"
