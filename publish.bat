@@ -1,36 +1,46 @@
 @echo off
-chcp 65001 >nul
+setlocal
 cd /d "%~dp0"
-title 发布 open-functional-self-lab
+title Publish open-functional-self-lab
 
 echo ==========================================
-echo   open-functional-self-lab  一键发布
-echo   等价于 docs/publish.md 的第 0 + 3 步
+echo   open-functional-self-lab  -  one click
+echo   equals docs/publish.md steps 0 + 3
 echo ==========================================
 echo.
 
 where python >nul 2>nul
-if errorlevel 1 (
-    echo [错误] 没找到 python。请先安装 Python 3.10 以上版本。
-    echo        安装时记得勾选 "Add python.exe to PATH"。
-    pause
-    exit /b 1
-)
-
+if errorlevel 1 goto no_python
 where git >nul 2>nul
-if errorlevel 1 (
-    echo [错误] 没找到 git。请先安装 Git for Windows。
-    pause
-    exit /b 1
-)
+if errorlevel 1 goto no_git
 
-powershell -NoProfile -ExecutionPolicy Bypass -File "scripts\publish.ps1" %*
-set CODE=%errorlevel%
+set "PS=powershell"
+where powershell >nul 2>nul
+if errorlevel 1 set "PS=pwsh"
+
+%PS% -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\publish.ps1" %*
+set "CODE=%errorlevel%"
+
 echo.
-if not "%CODE%"=="0" (
-    echo [未完成] 退出码 %CODE%。把上面的红字发给我，我帮你看。
-) else (
-    echo [完成] 已推送到 GitHub。
-)
+if not "%CODE%"=="0" goto failed
+echo [DONE] pushed to GitHub.
+goto end
+
+:no_python
+echo [ERROR] python not found in PATH.
+echo         Install Python 3.10+ and tick "Add python.exe to PATH".
+goto end
+
+:no_git
+echo [ERROR] git not found in PATH.
+echo         Install Git for Windows, then reopen this window.
+goto end
+
+:failed
+echo [NOT DONE] exit code %CODE%.
+echo Copy the lines above into the chat and I will read them.
+
+:end
+echo.
 pause
 exit /b %CODE%
