@@ -344,6 +344,9 @@ def cmd_run(args: argparse.Namespace, ctx: Context) -> int:
     if status in ("ARCHIVED",):
         _emit("状态 ARCHIVED：不允许继续运行。")
         return EXIT_FAIL
+    if status == "REVIEWING":
+        _emit('上一轮还没评审：先 python -m lab.cli review --pass，或 review --fail --reason 原因')
+        return EXIT_FAIL
     if status in ("INIT",):
         ctx.store.transition("READY", ts=ctx.clock.now_iso(), actor="system", reason="首次运行")
         ctx.ledger.append("transition", ctx.store.load()["history"][-1], ctx.clock.now_iso(), actor="system")
@@ -359,9 +362,11 @@ def cmd_run(args: argparse.Namespace, ctx: Context) -> int:
     executed = 0
     try:
         budget.check("steps_per_run", steps)
+        budget.check("steps_per_day", steps)   # v0.1.4：没有日总量就能无限次 run
         last_record = None
         for record in _episode_records(seed, steps):
             budget.charge("steps_per_run", 1)
+            budget.charge("steps_per_day", 1)
             budget.charge("wall_clock_hours_per_run", 0.01)
             ctx.ledger.append("step", record, ctx.clock.now_iso())
             executed += 1
@@ -376,9 +381,8 @@ def cmd_run(args: argparse.Namespace, ctx: Context) -> int:
         _emit(f"已回滚，执行 {executed} 步后停止。")
         return EXIT_BUDGET
 
-    ctx.store.transition("REVIEWING", ts=ctx.clock.now_iso(), actor="agent", reason="本轮结束")
-    ctx.ledger.append("transition", ctx.store.load()["history"][-1], ctx.clock.now_iso())
-    ctx.store.transition("READY", ts=ctx.clock.now_iso(), actor="agent", reason="独立评审通过（占位规则）")
+    # v0.1.4：不再自己宣布"评审通过"。停在 REVIEWING，等 `lab review` 或人来判。
+    ctx.store.transition("REVIEWING", ts=ctx.clock.now_iso(), actor="agent", reason="本轮结束，等待独立评审")
     ctx.ledger.append("transition", ctx.store.load()["history"][-1], ctx.clock.now_iso())
 
     last = ctx.ledger.last() or {}
@@ -395,7 +399,8 @@ def cmd_run(args: argparse.Namespace, ctx: Context) -> int:
             f"损伤 {last_record['damage']} 稳态误差 {last_record['homeostatic_error']} "
             f"预测误差 {last_record['prediction_error']}"
         )
-    _emit(f"新增账本事件 {len(ctx.ledger.read()) - ledger_before} 条；下一步：python -m lab.cli verify")
+    _emit(f"新增账本事件 {len(ctx.ledger.read()) - ledger_before} 条")
+    _emit("等待评审：python -m lab.cli review --pass   （不通过则 --fail --reason \"原因\"）")
     return EXIT_OK
 
 
@@ -410,6 +415,20 @@ def cmd_verify(args: argparse.Namespace, ctx: Context) -> int:
 
     ok, detail = ctx.store.verify_history()
     results.append(("状态机重放", ok, detail))
+
+    # 交叉校验：state.json 里每次转换，账本必须有对应记录且顺序一致
+    history = [(step.get("from"), step.get("to")) for step in ctx.store.load().get("history", [])]
+    ledger_transitions = [
+        (record.get("payload", {}).get("from"), record.get("payload", {}).get("to"))
+        for record in ctx.ledger.events("transition")
+    ]
+    if history != ledger_transitions:
+        results.append(
+            ("状态与账本一致", False,
+             f"state.json {len(history)} 次转换 vs 账本 {len(ledger_transitions)} 次（不匹配）")
+        )
+    else:
+        results.append(("状态与账本一致", True, f"{len(history)} 次转换一一对应"))
 
     checkpoints = sorted((ctx.state_dir / "checkpoints").glob("*.json")) if (ctx.state_dir / "checkpoints").exists() else []
     if not checkpoints:
@@ -520,6 +539,39 @@ def cmd_bench(args: argparse.Namespace, ctx: Context) -> int:
     _emit("")
     _emit(f"最优：{best}（未做显著性检验，别当结论）")
     _emit(f"报告已写入 {target.relative_to(ctx.root).as_posix()}")
+    return EXIT_OK
+
+
+# ---------------------------------------------------------------- review
+
+
+def cmd_review(args: argparse.Namespace, ctx: Context) -> int:
+    """独立评审入口：v0.1.4 起，`run` 不再自己宣布通过。"""
+    if ctx.store.status() != "REVIEWING":
+        _emit(f"当前状态 {ctx.store.status()}，没有待评审的回合。先 `python -m lab.cli run`。")
+        return EXIT_FAIL
+    if not (args.passed or args.failed):
+        _emit("必须指定 --pass 或 --fail")
+        return EXIT_USAGE
+
+    if args.passed:
+        record = ctx.store.transition(
+            "READY", ts=ctx.clock.now_iso(), actor=f"human:{args.by}", reason=args.reason or "评审通过"
+        )
+        ctx.ledger.append("transition", record, ctx.clock.now_iso(), actor=f"human:{args.by}")
+        _emit(f"评审通过（{args.by}），状态回到 READY，可以再跑一轮。")
+        return EXIT_OK
+
+    record = ctx.store.transition(
+        "ROLLING_BACK", ts=ctx.clock.now_iso(), actor=f"human:{args.by}", reason=args.reason or "评审不通过"
+    )
+    ctx.ledger.append("transition", record, ctx.clock.now_iso(), actor=f"human:{args.by}")
+    ctx.notifier().emit("medium", "review-fail", args.reason or "评审不通过", dedupe_key="review-fail")
+    record = ctx.store.transition(
+        "READY", ts=ctx.clock.now_iso(), actor=f"human:{args.by}", reason="回滚完成"
+    )
+    ctx.ledger.append("transition", record, ctx.clock.now_iso(), actor=f"human:{args.by}")
+    _emit("评审不通过：已回滚到 READY，请先看 state/reports/ 再决定下一步。")
     return EXIT_OK
 
 
@@ -652,6 +704,13 @@ def build_parser() -> argparse.ArgumentParser:
     p_bench.add_argument("--steps", type=int, default=200, help="每个 seed 跑多少步")
     p_bench.add_argument("--seeds", type=int, default=3, help="用几个 seed（1..N）")
     p_bench.set_defaults(func=cmd_bench)
+
+    p_review = sub.add_parser("review", help="独立评审上一轮（通过 / 不通过）")
+    p_review.add_argument("--pass", dest="passed", action="store_true", help="评审通过，回到 READY")
+    p_review.add_argument("--fail", dest="failed", action="store_true", help="评审不通过，回滚后回到 READY")
+    p_review.add_argument("--by", default="reviewer", help="评审人")
+    p_review.add_argument("--reason", default="", help="结论理由（会写进账本）")
+    p_review.set_defaults(func=cmd_review)
 
     p_notify = sub.add_parser("notify", help="发一条通知（终端 + 账本 + state/notify.jsonl）")
     p_notify.add_argument("--level", choices=list(LEVELS), default="high")

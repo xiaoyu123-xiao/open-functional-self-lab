@@ -118,6 +118,7 @@ def benchmark(steps: int = 200, seeds: Sequence[int] = (1, 2, 3)) -> Dict[str, o
     names = ("random", "persistence", "linear")
     errors: Dict[str, List[float]] = {name: [] for name in names}
     wins: Dict[str, int] = {name: 0 for name in names}
+    tie_count = 0        # 并列最优的步数：不能算进任何一方的胜场，否则占比之和会超过 100%
     per_step: List[Dict[str, float]] = []
 
     for seed in seeds:
@@ -137,9 +138,11 @@ def benchmark(steps: int = 200, seeds: Sequence[int] = (1, 2, 3)) -> Dict[str, o
             for name in names:
                 errors[name].append(step_errors[name])
             best = min(step_errors.values())
-            for name in names:
-                if step_errors[name] == best:
-                    wins[name] += 1
+            winners = [name for name in names if step_errors[name] == best]
+            if len(winners) == 1:
+                wins[winners[0]] += 1
+            else:
+                tie_count += 1
             per_step.append(step_errors)
             for predictor in predictors:
                 predictor.update(actual)
@@ -152,6 +155,7 @@ def benchmark(steps: int = 200, seeds: Sequence[int] = (1, 2, 3)) -> Dict[str, o
         "mean": {},
         "std": {},
         "win_rate": {},
+        "tie_rate": 0.0,
         "per_step": per_step,
     }
     for name in names:
@@ -159,6 +163,7 @@ def benchmark(steps: int = 200, seeds: Sequence[int] = (1, 2, 3)) -> Dict[str, o
         summary["mean"][name] = round(sum(values) / len(values), 6)  # type: ignore[index]
         summary["std"][name] = round(_std(values), 6)  # type: ignore[index]
         summary["win_rate"][name] = round(wins[name] / len(values), 4)  # type: ignore[index]
+    summary["tie_rate"] = round(tie_count / len(errors["random"]), 4)  # type: ignore[index]
     return summary
 
 
@@ -200,10 +205,17 @@ def render_report(summary: Dict[str, object], generated_at: str) -> str:
     )
     lines.append("> 误差定义：x / y / energy / damage 四项的平均绝对偏差。**未做显著性检验**。")
     lines.append("")
-    lines.append("| 预测器 | 平均误差 | 标准差 | 单步最优占比 |")
+    lines.append("| 预测器 | 平均误差 | 标准差 | 单步严格最优占比 |")
     lines.append("|---|---|---|---|")
     for name in names:
         lines.append(f"| `{name}` | {means[name]:.4f} | {stds[name]:.4f} | {win_rates[name]*100:.1f}% |")
+    tie_rate = float(summary.get("tie_rate", 0.0))  # type: ignore[arg-type]
+    total_rate = sum(win_rates.values()) + tie_rate
+    lines.append("")
+    lines.append(
+        f"校验：三者占比 + 并列 {tie_rate*100:.1f}% = {total_rate*100:.1f}%（必须等于 100%，"
+        "否则说明统计口径又错了——v0.1.3 这里曾算出 168.2%）"
+    )
     lines.append("")
     if best == "persistence":
         verdict = "没有预测器打败持久性基线——这说明当前的任务太可预测（网格世界），或预测器太弱。"

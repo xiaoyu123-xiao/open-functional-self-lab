@@ -14,7 +14,8 @@ git clone https://github.com/xiaoyu123-xiao/open-functional-self-lab.git
 cd open-functional-self-lab
 python -m lab.cli doctor          # 10 项自检
 python -m lab.cli init
-python -m lab.cli run --steps 20  # 跑一轮受控循环
+python -m lab.cli run --steps 20  # 跑一轮受控循环（结束停在 REVIEWING）
+python -m lab.cli review --pass    # 评审通过才回到 READY
 python -m lab.cli verify          # 校验账本/状态机/checkpoint/预算
 python -m lab.cli lint            # 红线扫描
 python -m lab.cli bench --steps 200  # 预测基线对比（random/persistence/linear）
@@ -47,7 +48,7 @@ Windows / macOS / Linux 命令相同。想完全复现某次运行：加 `--fake
 | 通知：分级 / 24h 去重 / `ack` 回应 / 回应率 | `lab/notify.py` · `lab notify` · `lab inbox` |
 | 紧急冻结开关 | `lab freeze` / `lab unfreeze --by <你>` |
 
-**已验证**：10 项自检全过 · 49 个 unittest · CI 覆盖 Python 3.10–3.13 · 干净 clone 复验通过。
+**已验证**：10 项自检全过 · 57 个 unittest · CI 覆盖 Python 3.10–3.13 · 干净 clone 复验通过。
 
 ## 参与
 

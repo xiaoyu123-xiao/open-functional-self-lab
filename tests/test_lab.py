@@ -351,6 +351,88 @@ class PredictTests(unittest.TestCase):
         self.assertEqual(sparkline([]), "")
 
 
+class LogicAuditTests(unittest.TestCase):
+    """v0.1.4 修掉的 6 个逻辑问题，每个都留一条回归测试。"""
+
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+        self.now = ["--fake-now", "2026-01-01T00:00:00Z"]
+
+    def tearDown(self) -> None:
+        self.tmp.cleanup()
+
+    def _run(self, *args: str, expect: int = 0) -> int:
+        code = cli_main(["--root", str(self.root), *self.now, *args])
+        self.assertEqual(code, expect, msg=f"{args} 期望 {expect} 实际 {code}")
+        return code
+
+    def test_win_rate_sums_to_one(self) -> None:
+        summary = benchmark(steps=50, seeds=(1, 2))
+        total = sum(summary["win_rate"].values()) + summary["tie_rate"]
+        self.assertAlmostEqual(total, 1.0, places=6)
+
+    def test_run_stops_in_reviewing(self) -> None:
+        self._run("init")
+        self._run("run", "--steps", "5")
+        state = json.loads((self.root / "state" / "state.json").read_text(encoding="utf-8"))
+        self.assertEqual(state["status"], "REVIEWING")
+        self.assertEqual(state["history"][-1]["reason"], "本轮结束，等待独立评审")
+
+    def test_unreviewed_run_blocks_next_run(self) -> None:
+        self._run("init")
+        self._run("run", "--steps", "5")
+        self._run("run", "--steps", "5", expect=1)
+
+    def test_review_pass_returns_to_ready(self) -> None:
+        self._run("init")
+        self._run("run", "--steps", "5")
+        self._run("review", "--pass", "--by", "tester", "--reason", "指标正常")
+        self.assertEqual(json.loads((self.root / "state" / "state.json").read_text(encoding="utf-8"))["status"], "READY")
+        self._run("run", "--steps", "5")
+        self._run("verify")
+
+    def test_review_fail_rolls_back_and_alerts(self) -> None:
+        self._run("init")
+        self._run("run", "--steps", "5")
+        self._run("review", "--fail", "--by", "tester", "--reason", "预测误差异常")
+        state = json.loads((self.root / "state" / "state.json").read_text(encoding="utf-8"))
+        self.assertEqual(state["status"], "READY")
+        self.assertIn("ROLLING_BACK", [step["to"] for step in state["history"]])
+        ledger = (self.root / "state" / "ledger.jsonl").read_text(encoding="utf-8")
+        self.assertIn("review-fail", ledger)
+
+    def test_verify_detects_state_ledger_mismatch(self) -> None:
+        self._run("init")
+        self._run("run", "--steps", "3")
+        # 往账本里塞一条 state.json 没有的转换
+        from lab.ledger import Ledger
+
+        ledger = Ledger(self.root / "state" / "ledger.jsonl")
+        ledger.append("transition", {"from": "READY", "to": "RUNNING"}, "2026-01-01T00:00:00Z")
+        self._run("verify", expect=1)
+
+    def test_daily_step_cap_enforced(self) -> None:
+        (self.root / "lab.config.json").write_text(
+            json.dumps({"version": 1, "budget": {"steps_per_day": 4}}), encoding="utf-8"
+        )
+        self._run("init")
+        self._run("run", "--steps", "10", expect=3)
+
+    def test_notify_health_not_counted_in_its_own_denominator(self) -> None:
+        state = self.root / "state"
+        ledger = Ledger(state / "ledger.jsonl")
+        clock = FakeClock("2026-01-01T00:00:00Z")
+        notifier = Notifier(ledger, clock, state, echo=False)
+        for index in range(3):
+            notifier.emit("high", "drift", f"第{index}条", dedupe_key=str(index))
+        health = notifier.check_health()
+        self.assertIsNotNone(health)
+        # 健康提醒本身不算"待回应的告警"，否则越提醒回应率越低
+        kinds = [record["payload"]["kind"] for record in notifier.pending()]
+        self.assertNotIn("notify-health", kinds)
+
+
 class NotifyTests(unittest.TestCase):
     """Issue 0019：通知分级 / 去重 / 回应 / 回应率。"""
 

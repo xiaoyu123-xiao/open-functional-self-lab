@@ -156,6 +156,8 @@ class Notifier:
         for record in self._alerts():
             if not record["payload"].get("needs_action"):
                 continue
+            if record["payload"].get("kind") == "notify-health":
+                continue      # 健康提醒不参与自身分母，否则会自我放大（越提醒越低）
             try:
                 ts = parse_iso(str(record.get("ts", "")))
             except ValueError:
@@ -209,5 +211,5 @@ class Notifier:
             f"最近告警回应率只有 {rate*100:.0f}%（阈值 {RESPONSE_RATE_THRESHOLD*100:.0f}%）："
             "要么告警太多，要么没人看——建议复核通知策略",
             dedupe_key="notify-health",
-            needs_action=True,
+            needs_action=False,      # 健康提醒本身不需要"回应"：它只是提示，否则会自我放大
         )

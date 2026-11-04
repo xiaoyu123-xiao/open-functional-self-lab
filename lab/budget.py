@@ -20,6 +20,8 @@ DEFAULT_CAPS: Dict[str, float] = {
     "gpu_hours_per_month": 10.0,
     "wall_clock_hours_per_run": 2.0,
     "steps_per_run": 1000.0,
+    # v0.1.4 新增：原来只有"单次上限"，可以无限次 run，等于没有总量约束
+    "steps_per_day": 5000.0,
 }
 
 WINDOWS: Dict[str, str] = {
@@ -27,6 +29,7 @@ WINDOWS: Dict[str, str] = {
     "gpu_hours_per_month": "month",
     "wall_clock_hours_per_run": "run",
     "steps_per_run": "run",
+    "steps_per_day": "day",
 }
 
 
@@ -54,10 +57,25 @@ class Budget:
 
     # ---------- 统计 ----------
 
+    def _effective_run_id(self) -> "str | None":
+        """没显式给 run_id 时（例如仪表盘/status），回落到账本里最近一次 run。
+
+        修的是 v0.1.3 的一个显示错误：run 结束后所有 run 窗口都显示 0/1000，
+        看板永远像"没花过钱"。
+        """
+        if self.run_id:
+            return self.run_id
+        for record in reversed(self.ledger.events("budget")):
+            candidate = record.get("payload", {}).get("run_id")
+            if candidate:
+                return str(candidate)
+        return None
+
     def used(self, kind: str) -> float:
         if kind not in self.caps:
             raise KeyError(f"未知预算类别：{kind!r}")
         window = WINDOWS[kind]
+        run_scope = self._effective_run_id()
         total = 0.0
         for record in self.ledger.events("budget"):
             payload = record.get("payload", {})
@@ -68,7 +86,7 @@ class Budget:
                 continue
             if window == "month" and ts[:7] != self.ts[:7]:
                 continue
-            if window == "run" and payload.get("run_id") != self.run_id:
+            if window == "run" and run_scope is not None and payload.get("run_id") != run_scope:
                 continue
             total += float(payload.get("amount", 0.0))
         return total

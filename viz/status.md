@@ -1,18 +1,18 @@
 # 实验台仪表盘
 
 > 本文件由 `python -m lab.cli viz` 自动生成，请勿手改。
-> 生成时间：`2026-11-04T06:14:52Z`　当前状态：**READY**（就绪）
+> 生成时间：`2026-11-04T06:19:46Z`　当前状态：**READY**（就绪）
 
 ## 1. 概览
 
 | 指标 | 值 |
 |---|---|
-| 账本事件数 | 296 |
-| 状态转换次数 | 16 |
+| 账本事件数 | 382 |
+| 状态转换次数 | 19 |
 | 回滚次数 | 0 |
-| 告警数 / 已回应 | 2 / 1 |
-| 已执行步数 | 88 |
-| 最近一步预测误差 | 0.005 |
+| 告警数 / 已回应 | 3 / 1 |
+| 已执行步数 | 108 |
+| 最近一步预测误差 | 0.25 |
 
 ## 2. 预算
 
@@ -20,21 +20,22 @@
 |---|---|---|---|---|
 | `search_requests_per_day` | 0 | 200 | 200 | day |
 | `gpu_hours_per_month` | 0 | 10 | 10 | month |
-| `wall_clock_hours_per_run` | 0 | 2 | 2 | run |
-| `steps_per_run` | 0 | 1000 | 1000 | run |
+| `wall_clock_hours_per_run` | 0.2 | 2 | 1.8 | run |
+| `steps_per_run` | 20 | 1000 | 980 | run |
+| `steps_per_day` | 20 | 5000 | 4980 | day |
 
 ## 3. 最近事件
 
 | seq | 时间 | 事件 | 摘要 |
 |---|---|---|---|
-| 289 | `2026-11-04T06:05:34Z` | `transition` | RUNNING → REVIEWING（本轮结束） |
-| 290 | `2026-11-04T06:05:34Z` | `transition` | REVIEWING → READY（独立评审通过（占位规则）） |
-| 291 | `2026-11-04T06:05:34Z` | `checkpoint` | ledger_hash=897c5128fa4e3e50344fe2511785d41e7ea36a10ab287ea41a4d4047fd38e4c7, path=state/checkpoints/run-005.json, run_id=run-005 |
-| 292 | `2026-11-04T06:08:12Z` | `bench` | mean={'linear': 0.041133, 'persistence': 0.04305, 'random': 1.607786}, samples=300, seeds=[1, 2, 3] |
-| 293 | `2026-11-04T06:08:46Z` | `bench` | mean={'linear': 0.020992, 'persistence': 0.021525, 'random': 1.63701}, samples=600, seeds=[1, 2, 3] |
-| 294 | `2026-11-04T06:13:58Z` | `alert` | dedupe_key=demo, kind=demo, level=high |
-| 295 | `2026-11-04T06:13:58Z` | `alert` | dedupe_key=notify-health, kind=notify-health, level=medium |
-| 296 | `2026-11-04T06:14:02Z` | `ack` | action=freeze, by=xiaoyu123-xiao, note=已人工确认 |
+| 375 | `2026-11-04T06:19:37Z` | `step` | 步 19：动作 right，预测误差 0.27 |
+| 376 | `2026-11-04T06:19:36Z` | `budget` | steps_per_run +1.0 |
+| 377 | `2026-11-04T06:19:36Z` | `budget` | steps_per_day +1.0 |
+| 378 | `2026-11-04T06:19:36Z` | `budget` | wall_clock_hours_per_run +0.01 |
+| 379 | `2026-11-04T06:19:37Z` | `step` | 步 20：动作 down，预测误差 0.25 |
+| 380 | `2026-11-04T06:19:37Z` | `transition` | RUNNING → REVIEWING（本轮结束，等待独立评审） |
+| 381 | `2026-11-04T06:19:37Z` | `checkpoint` | ledger_hash=8f7f8663b329b75e693024c439445a4d5ab06551ebbdee0f748f427361a84d41, path=state/checkpoints/run-006.json, run_id=run-006 |
+| 382 | `2026-11-04T06:19:38Z` | `transition` | REVIEWING → READY（指标在预期范围内） |
 
 ## 4. 状态机
 

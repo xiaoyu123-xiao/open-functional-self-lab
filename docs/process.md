@@ -34,7 +34,9 @@ python -m unittest discover -s tests -q   # 必须 OK，否则你的改动会跟
 python -m lab.cli doctor
 python -m unittest discover -s tests -v
 python -m lab.cli lint
-python -m lab.cli run --steps 20 && python -m lab.cli verify
+python -m lab.cli run --steps 20
+python -m lab.cli review --pass
+python -m lab.cli verify
 ```
 
 第 4 条会真的往 `state/` 写东西——这是有意的：**只在"能跑"的地方验证是假验证**。
