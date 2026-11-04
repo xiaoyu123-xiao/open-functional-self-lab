@@ -30,6 +30,7 @@ from .ledger import Ledger
 from .notify import DEDUPE_HOURS, LEVELS, Notifier
 from .predict import benchmark as run_benchmark
 from .knowledge import KnowledgeBase
+from .loop import cycle as run_cycle, format_cycle
 from .selfmodel import SelfModel
 from .web import LiveFetcher, OfflineFetcher, fetch_many
 from .predict import render_report as render_bench
@@ -607,6 +608,68 @@ def cmd_review(args: argparse.Namespace, ctx: Context) -> int:
     return EXIT_OK
 
 
+# ---------------------------------------------------------------- train / eval / loop
+
+
+def cmd_train(args: argparse.Namespace, ctx: Context) -> int:
+    from .agent import QLearningAgent
+    from .tasks import train as do_train, train_seeds
+
+    agent = QLearningAgent(ctx.state_dir / "policy.json").load()
+    stats = do_train(agent, train_seeds(args.episodes), args.steps, epsilon=args.epsilon)
+    agent.save()
+    ctx.ledger.append("train", {**stats, "states": len(agent.table)}, ctx.clock.now_iso())
+    _emit(f"训练 {stats['episodes']} 个回合：训练集均分 {stats['mean_return']:+.3f}，"
+          f"吃到 {stats['ate']}，受伤 {stats['hurt']}，Q 表 {len(agent.table)} 状态")
+    _emit("注意：训练集分数不能用来宣称变强，必须看 eval。")
+    return EXIT_OK
+
+
+def cmd_eval(args: argparse.Namespace, ctx: Context) -> int:
+    from .agent import QLearningAgent
+    from .tasks import baseline_score, eval_seeds, evaluate
+
+    agent = QLearningAgent(ctx.state_dir / "policy.json").load()
+    seeds = eval_seeds(args.count)
+    learned = evaluate(agent, seeds, args.steps)
+    baseline = baseline_score(seeds, args.steps)
+    _emit(f"留出集（seed {seeds[0]}–{seeds[-1]}，{args.steps} 步 × {args.count} 个）：")
+    _emit(f"  学到的策略 {learned['mean_return']:+.3f}（吃到 {learned['ate']}，受伤 {learned['hurt']}）")
+    _emit(f"  BFS 基线   {baseline['mean_return']:+.3f}（吃到 {baseline['ate']}，受伤 {baseline['hurt']}）")
+    _emit(f"  差值 {learned['mean_return'] - baseline['mean_return']:+.3f}")
+    return EXIT_OK
+
+
+def cmd_loop(args: argparse.Namespace, ctx: Context) -> int:
+    status = ctx.store.status()
+    if status == "REVIEWING":
+        _emit("上一轮还没评审：先 `python -m lab.cli review --pass|--fail`")
+        return EXIT_FAIL
+    if status == "FROZEN":
+        _emit("已冻结：先 `python -m lab.cli unfreeze --by <你>`")
+        return EXIT_FAIL
+    if not ctx.store.exists():
+        cmd_init(argparse.Namespace(json=False, by=False), ctx)
+
+    total_improved = 0
+    for index in range(1, args.cycles + 1):
+        result = run_cycle(
+            policy_path=ctx.state_dir / "policy.json",
+            ledger=ctx.ledger,
+            ts=ctx.clock.now_iso(),
+            rounds=args.rounds,
+            episodes_per_round=args.episodes,
+            steps=args.steps,
+            eval_count=args.eval_count,
+        )
+        _emit(f"—— 第 {index}/{args.cycles} 轮 ——")
+        _emit(format_cycle(result))
+        total_improved += 1 if result["improved"] else 0
+    _emit("")
+    _emit(f"完成 {args.cycles} 轮，其中 {total_improved} 轮变好并保留了新策略。")
+    return EXIT_OK
+
+
 # ---------------------------------------------------------------- learn / knowledge
 
 
@@ -874,6 +937,25 @@ def build_parser() -> argparse.ArgumentParser:
     p_bench.add_argument("--steps", type=int, default=200, help="每个 seed 跑多少步")
     p_bench.add_argument("--seeds", type=int, default=3, help="用几个 seed（1..N）")
     p_bench.set_defaults(func=cmd_bench)
+
+    p_train = sub.add_parser("train", help="训练可学策略（写 state/policy.json）")
+    p_train.add_argument("--episodes", type=int, default=40)
+    p_train.add_argument("--steps", type=int, default=60)
+    p_train.add_argument("--epsilon", type=float, default=0.25)
+    p_train.set_defaults(func=cmd_train)
+
+    p_eval = sub.add_parser("eval", help="在留出集上评测（唯一允许宣称变强的分数）")
+    p_eval.add_argument("--count", type=int, default=20)
+    p_eval.add_argument("--steps", type=int, default=60)
+    p_eval.set_defaults(func=cmd_eval)
+
+    p_loop = sub.add_parser("loop", help="自驱循环：评测→训练→再评测→变差就回滚")
+    p_loop.add_argument("--cycles", type=int, default=3)
+    p_loop.add_argument("--rounds", type=int, default=3)
+    p_loop.add_argument("--episodes", type=int, default=30)
+    p_loop.add_argument("--steps", type=int, default=60)
+    p_loop.add_argument("--eval-count", type=int, default=20)
+    p_loop.set_defaults(func=cmd_loop)
 
     p_learn = sub.add_parser("learn", help="从白名单取样并入库（默认离线，读 docs/catalog）")
     p_learn.add_argument("--catalog", default=None, help="离线样本目录")

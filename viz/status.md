@@ -1,13 +1,13 @@
 # 实验台仪表盘
 
 > 本文件由 `python -m lab.cli viz` 自动生成，请勿手改。
-> 生成时间：`2026-11-04T06:31:31Z`　当前状态：**READY**（就绪）
+> 生成时间：`2026-11-04T06:36:33Z`　当前状态：**READY**（就绪）
 
 ## 1. 概览
 
 | 指标 | 值 |
 |---|---|
-| 账本事件数 | 431 |
+| 账本事件数 | 434 |
 | 状态转换次数 | 22 |
 | 回滚次数 | 0 |
 | 告警数 / 已回应 | 3 / 1 |
@@ -28,14 +28,14 @@
 
 | seq | 时间 | 事件 | 摘要 |
 |---|---|---|---|
-| 424 | `2026-11-04T06:25:58Z` | `step` | 步 10：动作 up，预测误差 0.255 |
-| 425 | `2026-11-04T06:25:58Z` | `transition` | RUNNING → REVIEWING（本轮结束，等待独立评审） |
-| 426 | `2026-11-04T06:25:58Z` | `checkpoint` | ledger_hash=65f1417640eeb3b86b440cfd5dc4635b703b1c5050f2336fab8e68b7568725f6, path=state/checkpoints/run-007.json, run_id=run-007 |
 | 427 | `2026-11-04T06:25:58Z` | `transition` | REVIEWING → READY（误差在预期内） |
 | 428 | `2026-11-04T06:30:39Z` | `budget` | search_requests_per_day +1.0 |
 | 429 | `2026-11-04T06:30:39Z` | `budget` | search_requests_per_day +1.0 |
 | 430 | `2026-11-04T06:30:39Z` | `budget` | search_requests_per_day +1.0 |
 | 431 | `2026-11-04T06:30:39Z` | `learn` | added=3, errors=0, fetched=3 |
+| 432 | `2026-11-04T06:35:52Z` | `cycle` | after=1.6, baseline=3.565, before=-4.495 |
+| 433 | `2026-11-04T06:35:52Z` | `cycle` | after=1.895, baseline=3.565, before=1.6 |
+| 434 | `2026-11-04T06:35:52Z` | `cycle` | after=1.925, baseline=3.565, before=1.845 |
 
 ## 4. 状态机
 

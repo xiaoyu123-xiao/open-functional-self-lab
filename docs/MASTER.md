@@ -116,7 +116,10 @@ python -m lab.cli verify                            # 账本/状态机/知识库
 | `lab/web.py` | 白名单取样（离线/在线两种 fetcher） | `learn --online` | ✅ 骨架 |
 | `lab/knowledge.py` | 声明入库、独立性、复审、哈希 | `knowledge` | ✅ 骨架 |
 | `lab/viz.py` / `lab/report.py` | 仪表盘 / 周报 | `viz` / `report` | ✅ |
-| `lab/plugins/` | 插件接口（manifest + 红线 + 预算声明） | — | ⬜ v0.4 |
+| `lab/agent.py` | 可学策略（表格 Q-learning，参数存 `state/policy.json`） | `train` / `eval` | ✅ |
+| `lab/tasks.py` | 训练/留出 seed 分离 + 课程 + BFS 对照 | `eval` | ✅ |
+| `lab/loop.py` | 自驱循环一轮：评测→训练→再评测→变差回滚 | `loop` | ✅ |
+| `lab/plugins/` | 插件接口（manifest + 红线 + 预算声明） | — | ⬜ 下一版 |
 | `lab/loop.py` | 自驱循环（不需逐条敲命令） | `loop` | ⬜ v0.3 下一步 |
 
 ---
@@ -134,6 +137,9 @@ python -m lab.cli verify                            # 账本/状态机/知识库
 | `knowledge [stats|list|review|check]` | 知识库 |
 | `self [init|goal-add|goal-done]` | 自我模型 |
 | `notify` / `ack` / `inbox` | 通知 |
+| `train --episodes N --steps N` | 训练策略，写 `state/policy.json` |
+| `eval --count N --steps N` | 留出集评测 + 与 BFS 基线对比 |
+| `loop --cycles N` | 自驱循环：评测→训练→再评测→变差就回滚 |
 | `bench --steps N --seeds N` | 预测基线 |
 | `viz` / `report` | 仪表盘 / 周报 |
 | `verify` / `lint` / `status` | 校验 / 红线 / 状态 |
@@ -181,7 +187,8 @@ python -m lab.cli verify                            # 账本/状态机/知识库
 
 | 未实现 | 影响 | 计划 |
 |---|---|---|
-| `lab loop`（自驱循环） | 现在仍需你敲 `run` | v0.3 |
+| 策略仍打不过 BFS 基线 | 留出 +1.9 vs 基线 +3.6（见 `docs/experiments/0001-learnability.md`） | 状态表示升级 |
+| 课程机制只有 seed 分段 | 难度还没自动递增 | 下一版 |
 | 插件接口 | 加功能要改代码 | v0.4 |
 | 在线取样默认启用 | 默认离线，需 `--online` 且白名单 | 保持现状（安全） |
 | 知识影响决策 | 知识库还没参与"下一轮做什么" | v0.3 关键 |
@@ -196,7 +203,8 @@ python -m lab.cli verify                            # 账本/状态机/知识库
 
 | 版本 | 内容 | 验收 |
 |---|---|---|
-| **v0.3**（进行中） | `lab loop`：自己连续跑；**每轮先 `learn` 取新声明，再决定做什么** | 连续 10 轮、每轮有账本、注入超预算必须自己停 |
+| **v0.4**（本版） | 可学策略 + 训练/留出分离 + 循环回滚 | 留出分数必须上升，否则回滚并记录（已达成） |
+| **v0.5** | 策略追上并超过 BFS；课程自动加难；知识参与决策 | M1: ≥ +3.565 连续 3 轮；M2: ≥ +4.28 |
 | **v0.4** | 插件接口：`lab/plugins/*.py` + manifest（能力、预算、红线扫描） | 不改编 core 就能加一种新取样源 |
 | **v1.0** | 长期运行：checkpoint 真恢复、真实计时、7×24 稳定性报告 | 断电重启后能接上并说明"我停在哪" |
 

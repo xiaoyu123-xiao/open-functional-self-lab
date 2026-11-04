@@ -20,6 +20,7 @@ python -m lab.cli run --steps 20  # 跑一轮受控循环（结束停在 REVIEWI
 python -m lab.cli review --pass    # 评审通过才回到 READY
 python -m lab.cli self             # 看它对自己的描述（能力/失败模式/目标）
 python -m lab.cli learn            # 离线取样入知识库（不联网）；--online 才真的取
+python -m lab.cli loop --cycles 3  # 自驱循环：评测→训练→再评测→变差就回滚
 python -m lab.cli verify          # 校验账本/状态机/checkpoint/预算
 python -m lab.cli lint            # 红线扫描
 python -m lab.cli bench --steps 200  # 预测基线对比（random/persistence/linear）
@@ -54,7 +55,7 @@ Windows / macOS / Linux 命令相同。想完全复现某次运行：加 `--fake
 | **取样入库**：白名单 → 声明 → 独立性 → 复审 | `lab/web.py` · `lab/knowledge.py` · `lab learn` |
 | 紧急冻结开关 | `lab freeze` / `lab unfreeze --by <你>` |
 
-**已验证**：10 项自检全过 · 71 个 unittest · CI 覆盖 Python 3.10–3.13 · 干净 clone 复验通过。
+**已验证**：10 项自检全过 · 77 个 unittest · CI 覆盖 Python 3.10–3.13 · 干净 clone 复验通过。
 
 ## 参与
 

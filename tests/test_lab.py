@@ -26,6 +26,9 @@ from lab.env import GridWorld, greedy_action  # noqa: E402
 from lab.notify import Notifier  # noqa: E402
 from lab.selfmodel import SelfModel  # noqa: E402
 from lab.knowledge import KnowledgeBase  # noqa: E402
+from lab.agent import QLearningAgent  # noqa: E402
+from lab.tasks import assert_disjoint, eval_seeds, evaluate, train, train_seeds  # noqa: E402
+from lab.loop import cycle  # noqa: E402
 from lab.web import LiveFetcher, NotAllowed, OfflineFetcher, check_url, is_allowed  # noqa: E402
 from lab.predict import Linear, Persistence, benchmark, error, sparkline  # noqa: E402
 from lab.ledger import Ledger  # noqa: E402
@@ -352,6 +355,67 @@ class PredictTests(unittest.TestCase):
         self.assertEqual(len(sparkline([0.1, 0.2, 0.3])), 3)
         self.assertEqual(len(sparkline(list(range(200)), width=20)), 20)
         self.assertEqual(sparkline([]), "")
+
+
+class LearningTests(unittest.TestCase):
+    """v0.4：可学策略 + 训练/留出分离 + 循环回滚。"""
+
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+        self.policy = self.root / "state" / "policy.json"
+
+    def tearDown(self) -> None:
+        self.tmp.cleanup()
+
+    def test_train_and_eval_ranges_are_disjoint(self) -> None:
+        assert_disjoint()
+        self.assertFalse(set(train_seeds(50)) & set(eval_seeds(50)))
+
+    def test_training_improves_held_out_score(self) -> None:
+        agent = QLearningAgent(self.policy, seed=0)
+        evaluation = eval_seeds(6)
+        before = evaluate(agent, evaluation, 40)["mean_return"]
+        for _ in range(3):
+            train(agent, train_seeds(20), 40, epsilon=0.3)
+        after = evaluate(agent, evaluation, 40)["mean_return"]
+        self.assertGreater(after, before + 2.0, msg=f"训练前 {before} 训练后 {after}")
+
+    def test_policy_roundtrip(self) -> None:
+        agent = QLearningAgent(self.policy, seed=0)
+        train(agent, train_seeds(10), 30, epsilon=0.3)
+        agent.save()
+        reloaded = QLearningAgent(self.policy).load()
+        self.assertEqual(len(reloaded.table), len(agent.table))
+        self.assertEqual(reloaded.best_action(next(iter(agent.table))), agent.best_action(next(iter(agent.table))))
+
+    def test_cycle_records_and_keeps_policy(self) -> None:
+        root = Path(self.tmp.name)
+        ledger = Ledger(root / "ledger.jsonl")
+        result = cycle(
+            policy_path=root / "policy.json",
+            ledger=ledger,
+            ts="2026-01-01T00:00:00Z",
+            rounds=2,
+            episodes_per_round=12,
+            steps=30,
+            eval_count=5,
+        )
+        self.assertTrue(result["improved"])
+        self.assertTrue((root / "policy.json").exists())
+        self.assertEqual(len(ledger.events("cycle")), 1)
+        self.assertIn("baseline", ledger.events("cycle")[0]["payload"])
+
+    def test_cycle_rejects_bad_arguments(self) -> None:
+        with self.assertRaises(ValueError):
+            cycle(policy_path=self.policy, ledger=Ledger(self.root / "l.jsonl"), ts="2026-01-01T00:00:00Z", rounds=0)
+
+    def test_loop_blocked_when_reviewing(self) -> None:
+        args = ["--root", str(self.root), "--fake-now", "2026-01-01T00:00:00Z"]
+        self.assertEqual(cli_main([*args, "init"]), 0)
+        self.assertEqual(cli_main([*args, "run", "--steps", "3"]), 0)      # 停在 REVIEWING
+        self.assertEqual(cli_main([*args, "loop", "--cycles", "1", "--rounds", "1", "--episodes", "5",
+                                   "--steps", "20", "--eval-count", "3"]), 1)
 
 
 class IngestTests(unittest.TestCase):
