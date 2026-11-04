@@ -24,6 +24,7 @@
 | 紧急冻结开关 | `lab freeze` / `lab unfreeze --by <你>` |
 | 19 个可认领任务 | `issues/README.md` |
 | 发布流程（含回滚） | `docs/publish.md` |
+| **从没建过仓库？** | `docs/publish-first-time.md`（图文级，含双击发布的 `publish.bat`） |
 
 ## 这不是什么
 
