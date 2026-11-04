@@ -8,7 +8,29 @@
 ### 计划
 - Issue 0019：通知分级、`/ack`、防疲劳、回应率统计
 - Issue 0014：decay / TTL / 调度器（含 DST 规则）
-- Issue 0003：预测基线对比（把 `prediction_error` 拿去和更强的预测器比）
+- Issue 0008：实验闭环（更复杂的任务，才看得出预测器的真实差距）
+
+## [0.1.2] - 2026-11-04
+
+第一次能回答"这个 `prediction_error` 到底算好还是算差"。
+
+### Added
+- `lab/predict.py`：三个预测器 + 统一误差定义（x / y / energy / damage 的平均绝对偏差）
+  - `random`：合法范围内随机猜（固定 seed，可复现），当下界用
+  - `persistence`：假设"下一步 = 上一步"，主基线
+  - `linear`：假设"下一步 = 上一步 + 最近一次位移"，速度外推
+- `python -m lab.cli bench --steps 200 --seeds 3`：跑同一批 seed，输出对比表，
+  写 `state/reports/bench-YYYY-MM-DD.md`，并向账本追加 `bench` 事件
+- 报告含 ASCII 误差曲线（无绘图依赖）、单步最优占比、明确的「未做显著性检验」说明
+- 6 个新测试：静态序列零误差、匀速序列下线性优于持久性、benchmark 可复现、random 更差、sparkline 形状
+
+### Changed
+- 测试数 35 → 41；`issues/0003` 标记为已完成
+- `docs/metrics.md` 增加实测章节（600 步的真实数字与读数方法）
+
+### Fixed
+- `Linear` 预测器的位移只在收到两个观测后才生效，导致前两步白错：改为记录"本次预测出发的观测"，
+  第一步之后即可正确外推
 
 ## [0.1.1] - 2026-11-04
 

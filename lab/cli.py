@@ -27,6 +27,8 @@ from .budget import DEFAULT_CAPS, Budget, BudgetExceeded
 from .env import GridWorld, greedy_action, persistence_error
 from .clock import Clock, FakeClock, parse_iso, to_iso
 from .ledger import Ledger
+from .predict import benchmark as run_benchmark
+from .predict import render_report as render_bench
 from .report import render as render_report
 from .state import STATES, IllegalTransition, StateStore
 from .viz import render as render_viz
@@ -478,6 +480,45 @@ def cmd_report(args: argparse.Namespace, ctx: Context) -> int:
     return EXIT_OK
 
 
+# ---------------------------------------------------------------- bench
+
+
+def cmd_bench(args: argparse.Namespace, ctx: Context) -> int:
+    if args.steps <= 0 or args.seeds <= 0:
+        _emit("steps 和 seeds 都必须是正整数")
+        return EXIT_USAGE
+    seeds = tuple(range(1, args.seeds + 1))
+    summary = run_benchmark(steps=args.steps, seeds=seeds)
+    now = ctx.clock.now_iso()
+    text = render_bench(summary, now)
+
+    directory = ctx.state_dir / "reports"
+    directory.mkdir(parents=True, exist_ok=True)
+    target = directory / f"bench-{parse_iso(now).strftime('%Y-%m-%d')}.md"
+    target.write_text(text, encoding="utf-8")
+    ctx.ledger.append(
+        "bench",
+        {
+            "steps_per_seed": args.steps,
+            "seeds": list(seeds),
+            "samples": summary["samples"],
+            "mean": summary["mean"],
+        },
+        now,
+    )
+
+    names = ("random", "persistence", "linear")
+    _emit(f"预测基线对比：{summary['samples']} 步（每 seed {args.steps} 步 × {args.seeds} 个 seed）")
+    _emit(_table([("预测器", "平均误差", "标准差")] + [
+        (name, f"{summary['mean'][name]:.4f}", f"{summary['std'][name]:.4f}") for name in names
+    ]))
+    best = min(names, key=lambda name: summary["mean"][name])
+    _emit("")
+    _emit(f"最优：{best}（未做显著性检验，别当结论）")
+    _emit(f"报告已写入 {target.relative_to(ctx.root).as_posix()}")
+    return EXIT_OK
+
+
 # ---------------------------------------------------------------- status / freeze
 
 
@@ -559,6 +600,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_report = sub.add_parser("report", help="生成周报")
     p_report.set_defaults(func=cmd_report)
+
+    p_bench = sub.add_parser("bench", help="预测基线对比（random / persistence / linear）")
+    p_bench.add_argument("--steps", type=int, default=200, help="每个 seed 跑多少步")
+    p_bench.add_argument("--seeds", type=int, default=3, help="用几个 seed（1..N）")
+    p_bench.set_defaults(func=cmd_bench)
 
     p_status = sub.add_parser("status", help="打印当前状态")
     p_status.set_defaults(func=cmd_status)

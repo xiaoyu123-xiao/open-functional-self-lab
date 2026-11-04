@@ -23,6 +23,7 @@ from lab.cli import _episode_records  # noqa: F401  私有函数，测试里用�
 from lab.cli import main as cli_main  # noqa: E402
 from lab.clock import Clock, FakeClock, elapsed_seconds, parse_iso, to_iso  # noqa: E402
 from lab.env import GridWorld, greedy_action  # noqa: E402
+from lab.predict import Linear, Persistence, benchmark, error, sparkline  # noqa: E402
 from lab.ledger import Ledger  # noqa: E402
 from lab.policy import scan, scan_text, summarize  # noqa: E402
 from lab.state import IllegalTransition, StateStore  # noqa: E402
@@ -193,6 +194,17 @@ class CliTests(unittest.TestCase):
         self.assertEqual(len(reports), 1)
         self.assertTrue((self.root / "state" / "checkpoints").exists())
 
+    def test_bench_writes_report_and_ledger(self) -> None:
+        self._run("init")
+        self._run("bench", "--steps", "20", "--seeds", "2")
+        reports = list((self.root / "state" / "reports").glob("bench-*.md"))
+        self.assertEqual(len(reports), 1)
+        text = reports[0].read_text(encoding="utf-8")
+        self.assertIn("预测基线对比", text)
+        self.assertIn("persistence", text)
+        ledger = (self.root / "state" / "ledger.jsonl").read_text(encoding="utf-8")
+        self.assertIn('"bench"', ledger)
+
     def test_budget_exceeded_rolls_back(self) -> None:
         (self.root / "lab.config.json").write_text(
             json.dumps({"version": 1, "budget": {"steps_per_run": 3}}), encoding="utf-8"
@@ -289,6 +301,53 @@ class EnvTests(unittest.TestCase):
             self.assertIn(key, record)
         self.assertGreaterEqual(record["energy"], 0.0)
         self.assertLessEqual(record["energy"], 1.0)
+
+
+class PredictTests(unittest.TestCase):
+    """Issue 0003：预测基线对比。"""
+
+    @staticmethod
+    def _obs(x: float, y: float = 0.0, energy: float = 1.0, damage: float = 0.0) -> dict:
+        return {"x": x, "y": y, "energy": energy, "damage": damage}
+
+    def test_persistence_is_exact_on_static_series(self) -> None:
+        predictor = Persistence()
+        observation = self._obs(3)
+        self.assertEqual(error(predictor.predict(observation), observation), 0.0)
+
+    def test_linear_beats_persistence_on_constant_velocity(self) -> None:
+        persistence = Persistence()
+        linear = Linear()
+        persistence_total = 0.0
+        linear_total = 0.0
+        previous = self._obs(0.0)
+        for step in range(1, 6):
+            actual = self._obs(float(step))
+            persistence_total += error(persistence.predict(previous), actual)
+            linear_total += error(linear.predict(previous), actual)
+            persistence.update(actual)
+            linear.update(actual)
+            previous = actual
+        # 第一步没有历史速度可用，必然错一次；之后应完美跟随
+        self.assertLess(linear_total, persistence_total)
+        self.assertLessEqual(linear_total, 0.25)
+        self.assertAlmostEqual(linear_total, 0.25, places=6)
+
+    def test_benchmark_is_deterministic(self) -> None:
+        first = benchmark(steps=30, seeds=(1, 2))
+        second = benchmark(steps=30, seeds=(1, 2))
+        self.assertEqual(first["mean"], second["mean"])
+        self.assertEqual(first["samples"], 60)
+
+    def test_random_is_worse_than_persistence(self) -> None:
+        summary = benchmark(steps=40, seeds=(3,))
+        means = summary["mean"]
+        self.assertGreater(means["random"], means["persistence"])
+
+    def test_sparkline_shapes(self) -> None:
+        self.assertEqual(len(sparkline([0.1, 0.2, 0.3])), 3)
+        self.assertEqual(len(sparkline(list(range(200)), width=20)), 20)
+        self.assertEqual(sparkline([]), "")
 
 
 class SubprocessSmokeTests(unittest.TestCase):

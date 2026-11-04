@@ -17,6 +17,7 @@ python -m lab.cli init
 python -m lab.cli run --steps 20  # 跑一轮受控循环
 python -m lab.cli verify          # 校验账本/状态机/checkpoint/预算
 python -m lab.cli lint            # 红线扫描
+python -m lab.cli bench --steps 200  # 预测基线对比（random/persistence/linear）
 python -m lab.cli viz             # 生成仪表盘 viz/status.md
 ```
 
@@ -40,10 +41,11 @@ Windows / macOS / Linux 命令相同。想完全复现某次运行：加 `--fake
 | 显式状态机（非法转换拒绝，手改 state.json 会被抓） | `lab/state.py` · `logic/README.md` |
 | 预算硬闸门（超限抛异常 → 回滚 → 退出码 3） | `lab/budget.py` · `docs/budget.md` |
 | 红线扫描（CI 每次跑） | `lab/policy.py` · `SECURITY.md` |
-| 仪表盘 / 周报自动生成 | `lab/viz.py` · `lab/report.py` |
+| 仪表盘 / 周报自动生成 | lab/viz.py · lab/report.py |
+| 预测基线对比（random / persistence / linear） | lab/predict.py · lab bench |
 | 紧急冻结开关 | `lab freeze` / `lab unfreeze --by <你>` |
 
-**已验证**：10 项自检全过 · 35 个 unittest · CI 覆盖 Python 3.10–3.13 · 干净 clone 复验通过。
+**已验证**：10 项自检全过 · 41 个 unittest · CI 覆盖 Python 3.10–3.13 · 干净 clone 复验通过。
 
 ## 参与
 
@@ -60,7 +62,7 @@ Windows / macOS / Linux 命令相同。想完全复现某次运行：加 `--fake
 
 ## 已知边界
 
-- `lab run` 的环境是玩具级（8×8 网格），不是真实任务；预测基线对比见 Issue 0003
+- `lab run` 的环境是玩具级（8×8 网格），不是真实任务
 - 未做多用户鉴权，单机单人
 - 不收集个人数据；不接入任何脑机接口/神经信号设备
 
