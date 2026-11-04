@@ -122,7 +122,7 @@ def _path_bucket(env: GridWorld) -> str:
                 continue
             seen.add(nxt)
             frontier.append((nxt, steps + 1))
-    return "p3"
+    return "p15"
 
 
 def _size_bucket(env: GridWorld) -> str:
@@ -160,6 +160,11 @@ def state_of(env: GridWorld, with_walls: bool = False, with_path: bool = False) 
 
 
 def _distance_to_food(env: GridWorld) -> int:
+    """到最近食物的曼哈顿距离（用于奖励塑形）。
+
+    注：v0.26 试过改成"沿障碍的 BFS 距离"，在走廊地图上更差（−5.25 vs −1.03），
+    随机地图无差异，因此回退。见 docs/experiments/0014。
+    """
     if not env.food:
         return 0
     ax, ay = env.agent
