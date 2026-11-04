@@ -2,7 +2,10 @@
 
 > 研究"功能性自我模型"和开放式研究循环。**我们不宣称任何系统拥有意识。**
 >
+> **👉 只看一页：[docs/ONE-PAGE.md](docs/ONE-PAGE.md)**（有图、有命令、有证据）
+>
 > **先读哪一份？**
+> - **只想看一页 → [`docs/ONE-PAGE.md`](docs/ONE-PAGE.md)**
 > - 完全不懂它是什么 → [`docs/WHAT-IS-IT.md`](docs/WHAT-IS-IT.md)（2 分钟，有图有例子）
 > - 想直接跑 → [`docs/USER-GUIDE.md`](docs/USER-GUIDE.md)（复制粘贴即可）
 > - 你是另一个 AI 要接手执行 → [`AGENT-RUNBOOK.md`](AGENT-RUNBOOK.md)（含验收标准与停机条件）
