@@ -59,7 +59,7 @@ def _ci(values: Sequence[float]) -> tuple[float, float] | None:
     return mean - half, mean + half
 
 
-def run_reference(repeats: int = MIN_REPEATS, agent_factory: Any = None) -> Dict[str, Any]:
+def run_reference(repeats: int = MIN_REPEATS, agent_factory: Any = None, **overrides: Any) -> Dict[str, Any]:
     """在参考任务上跑 repeats 组，返回主指标与参考指标。"""
     from .linear import WeightedMultiHeadAgent
     from .tasks import eval_seeds, evaluate, train, train_seeds
@@ -67,19 +67,22 @@ def run_reference(repeats: int = MIN_REPEATS, agent_factory: Any = None) -> Dict
     if agent_factory is None:
         agent_factory = lambda seed: WeightedMultiHeadAgent(seed=seed)  # noqa: E731
 
+    config = dict(REFERENCE)
+    config.update({k: v for k, v in overrides.items() if k in config or k in {"epsilon", "explore_bonus"}})
     seeds = eval_seeds(6)
     runs: List[Run] = []
     for index in range(repeats):
         agent = agent_factory(index)
-        for _ in range(REFERENCE["rounds"]):
+        for _ in range(config["rounds"]):
             train(
-                agent, train_seeds(REFERENCE["episodes"]), REFERENCE["steps"],
-                epsilon=0.25, **{k: v for k, v in REFERENCE.items() if k in {
+                agent, train_seeds(config["episodes"]), config["steps"],
+                epsilon=float(config.get("epsilon", 0.25)),
+                explore_bonus=float(config.get("explore_bonus", 0.0)), **{k: v for k, v in REFERENCE.items() if k in {
                     "size", "layout", "hazards", "lethal", "hurt_penalty", "shaping", "with_path"}},
             )
         stats = evaluate(
-            agent, seeds, REFERENCE["steps"],
-            **{k: v for k, v in REFERENCE.items() if k in {
+            agent, seeds, config["steps"],
+            **{k: v for k, v in config.items() if k in {
                 "size", "layout", "hazards", "lethal", "hurt_penalty", "shaping", "with_path"}},
         )
         runs.append(Run(index, float(stats["ate"]), float(stats["hurt"]), float(stats["mean_return"])))
@@ -89,6 +92,7 @@ def run_reference(repeats: int = MIN_REPEATS, agent_factory: Any = None) -> Dict
     score = [r.score for r in runs]
     return {
         "reference": REFERENCE_VERSION,
+        "overrides": {k: v for k, v in overrides.items()},
         "repeats": repeats,
         "ate": {"mean": round(sum(ate) / len(ate), 3), "ci": _ci(ate)},
         "hurt": {"mean": round(sum(hurt) / len(hurt), 3), "ci": _ci(hurt)},

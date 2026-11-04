@@ -144,6 +144,7 @@ def train(
             lethal=lethal, armor=armor, size=size, layout=layout, with_path=with_path,
             slippery=slippery, hazard_drift=hazard_drift, hurt_penalty=hurt_penalty, one_hit=one_hit,
             survival_bonus=survival_bonus, death_penalty=death_penalty,
+            bonus_requires_progress=bonus_requires_progress, shaping=shaping, explore_bonus=explore_bonus,
         )
         for seed in seeds
     ]

@@ -553,6 +553,39 @@ class WeightedHeadTests(unittest.TestCase):
         self.assertEqual(len(summary["multi"]["runs"][0]["rows"]), len(HELDOUT_CONFIGS))
 
 
+class ParameterWiringTests(unittest.TestCase):
+    """v0.41：train 必须把 shaping/explore_bonus/bonus_requires_progress 传给 run_episode。
+
+    这些参数曾经"接收但不传"，导致 v0.38 的结论碰巧成立。
+    """
+
+    def test_train_forwards_reward_params(self) -> None:
+        from unittest import mock
+
+        captured = {}
+
+        def fake_run_episode(agent, seed, steps, **kwargs):
+            captured.update(kwargs)
+            return {"seed": seed, "steps": steps, "return": 0.0, "ate": 0, "hurt": 0,
+                    "energy": 1.0, "damage": 0.0, "dead": False}
+
+        with mock.patch("lab.tasks.run_episode", side_effect=fake_run_episode):
+            train(QLearningAgent(seed=0), [1000], 5, shaping="potential",
+                  explore_bonus=0.05, bonus_requires_progress=True)
+
+        self.assertEqual(captured.get("shaping"), "potential")
+        self.assertEqual(captured.get("explore_bonus"), 0.05)
+        self.assertTrue(captured.get("bonus_requires_progress"))
+
+    def test_explore_bonus_changes_training_outcome(self) -> None:
+        """探索奖励不能是空转：同样的种子，加与不加应产生不同策略。"""
+        plain = QLearningAgent(seed=0)
+        rich = QLearningAgent(seed=0)
+        train(plain, train_seeds(4), 30, epsilon=0.3, explore_bonus=0.0)
+        train(rich, train_seeds(4), 30, epsilon=0.3, explore_bonus=0.5)
+        self.assertNotEqual(len(plain.table), len(rich.table))
+
+
 class ReferenceBenchmarkTests(unittest.TestCase):
     """v0.40：冻结参考任务 + 探路/结论两级协议。"""
 
