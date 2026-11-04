@@ -27,7 +27,7 @@ from lab.notify import Notifier  # noqa: E402
 from lab.selfmodel import SelfModel  # noqa: E402
 from lab.knowledge import KnowledgeBase  # noqa: E402
 from lab.agent import QLearningAgent  # noqa: E402
-from lab.tasks import assert_disjoint, eval_seeds, evaluate, train, train_seeds  # noqa: E402
+from lab.tasks import assert_disjoint, baseline_score, eval_seeds, evaluate, train, train_seeds  # noqa: E402
 from lab.loop import cycle  # noqa: E402
 from lab.web import LiveFetcher, NotAllowed, OfflineFetcher, check_url, is_allowed  # noqa: E402
 from lab.predict import Linear, Persistence, benchmark, error, sparkline  # noqa: E402
@@ -405,6 +405,25 @@ class LearningTests(unittest.TestCase):
         self.assertTrue((root / "policy.json").exists())
         self.assertEqual(len(ledger.events("cycle")), 1)
         self.assertIn("baseline", ledger.events("cycle")[0]["payload"])
+
+    def test_difficulty_changes_baseline(self) -> None:
+        seeds = eval_seeds(5)
+        easy = baseline_score(seeds, 40, hazards=4)["mean_return"]
+        hard = baseline_score(seeds, 40, hazards=8)["mean_return"]
+        self.assertNotEqual(easy, hard)
+
+    def test_cycle_accepts_hazards(self) -> None:
+        result = cycle(
+            policy_path=self.policy,
+            ledger=Ledger(self.root / "l2.jsonl"),
+            ts="2026-01-01T00:00:00Z",
+            rounds=1,
+            episodes_per_round=8,
+            steps=20,
+            eval_count=3,
+            hazards=6,
+        )
+        self.assertEqual(result["hazards"], 6)
 
     def test_cycle_rejects_bad_arguments(self) -> None:
         with self.assertRaises(ValueError):

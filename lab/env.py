@@ -30,7 +30,14 @@ WALL_COUNT = 6
 class GridWorld:
     """确定性网格世界：状态全在对象里，step() 只前进不回头。"""
 
-    def __init__(self, seed: int = 0) -> None:
+    def __init__(
+        self,
+        seed: int = 0,
+        *,
+        walls: int = WALL_COUNT,
+        food: int = FOOD_COUNT,
+        hazards: int = HAZARD_COUNT,
+    ) -> None:
         rng = random.Random(seed)
         cells = [(x, y) for x in range(SIZE) for y in range(SIZE)]
         rng.shuffle(cells)
@@ -52,9 +59,9 @@ class GridWorld:
                 reserved.add(cell)
             return picked
 
-        self.walls = set(take(WALL_COUNT))
-        self.food = set(take(FOOD_COUNT))
-        self.hazards = set(take(HAZARD_COUNT))
+        self.walls = set(take(int(walls)))
+        self.food = set(take(int(food)))
+        self.hazards = set(take(int(hazards)))
 
     # ---------- 观测 ----------
 

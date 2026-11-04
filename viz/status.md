@@ -1,13 +1,13 @@
 # 实验台仪表盘
 
 > 本文件由 `python -m lab.cli viz` 自动生成，请勿手改。
-> 生成时间：`2026-11-04T06:36:33Z`　当前状态：**READY**（就绪）
+> 生成时间：`2026-11-04T06:43:16Z`　当前状态：**READY**（就绪）
 
 ## 1. 概览
 
 | 指标 | 值 |
 |---|---|
-| 账本事件数 | 434 |
+| 账本事件数 | 447 |
 | 状态转换次数 | 22 |
 | 回滚次数 | 0 |
 | 告警数 / 已回应 | 3 / 1 |
@@ -28,14 +28,14 @@
 
 | seq | 时间 | 事件 | 摘要 |
 |---|---|---|---|
-| 427 | `2026-11-04T06:25:58Z` | `transition` | REVIEWING → READY（误差在预期内） |
-| 428 | `2026-11-04T06:30:39Z` | `budget` | search_requests_per_day +1.0 |
-| 429 | `2026-11-04T06:30:39Z` | `budget` | search_requests_per_day +1.0 |
-| 430 | `2026-11-04T06:30:39Z` | `budget` | search_requests_per_day +1.0 |
-| 431 | `2026-11-04T06:30:39Z` | `learn` | added=3, errors=0, fetched=3 |
-| 432 | `2026-11-04T06:35:52Z` | `cycle` | after=1.6, baseline=3.565, before=-4.495 |
-| 433 | `2026-11-04T06:35:52Z` | `cycle` | after=1.895, baseline=3.565, before=1.6 |
-| 434 | `2026-11-04T06:35:52Z` | `cycle` | after=1.925, baseline=3.565, before=1.845 |
+| 440 | `2026-11-04T06:42:21Z` | `cycle` | after=-0.12, baseline=3.565, before=1.29 |
+| 441 | `2026-11-04T06:42:21Z` | `cycle` | after=-0.12, baseline=3.565, before=1.29 |
+| 442 | `2026-11-04T06:42:22Z` | `cycle` | after=-0.12, baseline=3.565, before=1.29 |
+| 443 | `2026-11-04T06:42:30Z` | `cycle` | after=2.2, baseline=3.565, before=-4.495 |
+| 444 | `2026-11-04T06:42:30Z` | `cycle` | after=2.17, baseline=3.565, before=2.2 |
+| 445 | `2026-11-04T06:42:30Z` | `cycle` | after=2.17, baseline=3.565, before=2.2 |
+| 446 | `2026-11-04T06:42:31Z` | `cycle` | after=2.17, baseline=3.565, before=2.2 |
+| 447 | `2026-11-04T06:42:31Z` | `cycle` | after=2.17, baseline=3.565, before=2.2 |
 
 ## 4. 状态机
 

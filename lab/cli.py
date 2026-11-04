@@ -651,6 +651,12 @@ def cmd_loop(args: argparse.Namespace, ctx: Context) -> int:
     if not ctx.store.exists():
         cmd_init(argparse.Namespace(json=False, by=False), ctx)
 
+    hazards = 4
+    knowledge = ctx.knowledge()
+    if any("hazard" in entry.get("tags", []) for entry in knowledge.current()):
+        hazards = 5
+        _emit("知识库里有 hazard 相关声明 → 起始难度 +1（v0.5 里'知识影响行为'的唯一方式）")
+
     total_improved = 0
     for index in range(1, args.cycles + 1):
         result = run_cycle(
@@ -661,10 +667,15 @@ def cmd_loop(args: argparse.Namespace, ctx: Context) -> int:
             episodes_per_round=args.episodes,
             steps=args.steps,
             eval_count=args.eval_count,
+            hazards=hazards,
         )
         _emit(f"—— 第 {index}/{args.cycles} 轮 ——")
         _emit(format_cycle(result))
         total_improved += 1 if result["improved"] else 0
+        # 课程：追上基线就加难，追不上就维持难度（不许靠降难度刷分）
+        if not args.no_curriculum and result["after"]["mean_return"] >= result["baseline"]["mean_return"]:
+            hazards = min(8, hazards + 1)
+            _emit(f"课程：难度提升到危险区 {hazards} 个")
     _emit("")
     _emit(f"完成 {args.cycles} 轮，其中 {total_improved} 轮变好并保留了新策略。")
     return EXIT_OK
@@ -955,6 +966,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_loop.add_argument("--episodes", type=int, default=30)
     p_loop.add_argument("--steps", type=int, default=60)
     p_loop.add_argument("--eval-count", type=int, default=20)
+    p_loop.add_argument("--no-curriculum", action="store_true", help="固定难度，不自动加难")
     p_loop.set_defaults(func=cmd_loop)
 
     p_learn = sub.add_parser("learn", help="从白名单取样并入库（默认离线，读 docs/catalog）")

@@ -30,6 +30,7 @@ def cycle(
     steps: int = 60,
     eval_count: int = 20,
     epsilon: float = 0.25,
+    hazards: int = 4,
 ) -> Dict[str, Any]:
     if rounds <= 0 or episodes_per_round <= 0 or steps <= 0 or eval_count <= 0:
         raise ValueError("rounds / episodes_per_round / steps / eval_count 都必须是正整数")
@@ -38,12 +39,12 @@ def cycle(
     agent = QLearningAgent(policy_path).load()
     evaluation = eval_seeds(eval_count)
 
-    before = evaluate(agent, evaluation, steps)
+    before = evaluate(agent, evaluation, steps, hazards=hazards)
     train_stats: List[Dict[str, Any]] = []
     for _ in range(rounds):
-        train_stats.append(train(agent, train_seeds(episodes_per_round), steps, epsilon=epsilon))
-    after = evaluate(agent, evaluation, steps)
-    baseline = baseline_score(evaluation, steps)
+        train_stats.append(train(agent, train_seeds(episodes_per_round), steps, epsilon=epsilon, hazards=hazards))
+    after = evaluate(agent, evaluation, steps, hazards=hazards)
+    baseline = baseline_score(evaluation, steps, hazards=hazards)
 
     improved = after["mean_return"] > before["mean_return"]
     if improved:
@@ -65,6 +66,7 @@ def cycle(
             "episodes_per_round": episodes_per_round,
             "updates": train_stats[-1].get("episodes", 0) if train_stats else 0,
             "states": len(agent.table),
+            "hazards": hazards,
         },
         ts,
     )
@@ -76,6 +78,7 @@ def cycle(
         "improved": improved,
         "states": len(agent.table),
         "record_seq": record["seq"],
+        "hazards": hazards,
     }
 
 
@@ -90,6 +93,6 @@ def format_cycle(result: Dict[str, Any]) -> str:
         f"变化 {result['delta']:+.3f} → {verdict}",
         f"BFS 基线 {result['baseline']['mean_return']:+.3f}，"
         f"当前策略与之差 {gap:+.3f}（负数表示还没追上）",
-        f"Q 表状态数 {result['states']}，账本记录 #{result['record_seq']}",
+        f"难度（危险区数量）{result['hazards']}，Q 表状态数 {result['states']}，账本记录 #{result['record_seq']}",
     ]
     return "\n".join(lines)

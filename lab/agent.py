@@ -17,6 +17,7 @@
 from __future__ import annotations
 
 import json
+import math
 import random
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
@@ -68,7 +69,17 @@ def _bucket_distance(env: GridWorld) -> int:
     return 3
 
 
+# 负结果（实验 0002）：把"四方向墙体"加进状态后，状态数从 126 涨到 948，
+# 同样 320 回合训练下留出分数从 +2.6 掉到 -0.4。表格法在样本有限时会被状态爆炸拖死。
+# 结论：加特征不是免费的；要加就先换函数逼近（见 docs/experiments/0002-feature-bloat.md）。
+
+
 def state_of(env: GridWorld) -> str:
+    """状态 =（食物方向 | 距离档 | 能量档 | 损伤档）。
+
+    v0.5 试过加入"四方向墙体"，结果状态数 126→948、留出分数 +2.6→-0.4，已撤回。
+    要加特征必须先换函数逼近，否则是被状态爆炸拖死，不是"更聪明"。
+    """
     observation = env.observe()
     return "|".join(
         [
@@ -119,7 +130,10 @@ class QLearningAgent:
     def update(self, state: str, action: str, reward: float, next_state: str) -> None:
         row = self.q(state)
         future = max(self.q(next_state).values())
-        row[action] += ALPHA * (reward + GAMMA * future - row[action])
+        # 学习率随更新次数衰减（1/sqrt）：继续训练时不会把已经学好的策略冲垮。
+        # 这是 v0.5 的修复：不加衰减时，第二轮训练会让留出分数从 +1.3 掉到 -0.1。
+        alpha = ALPHA / math.sqrt(1.0 + self.updates / 500.0)
+        row[action] += alpha * (reward + GAMMA * future - row[action])
         self.updates += 1
 
     # ---------- 存取 ----------
