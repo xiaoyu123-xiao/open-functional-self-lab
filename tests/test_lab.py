@@ -553,6 +553,38 @@ class WeightedHeadTests(unittest.TestCase):
         self.assertEqual(len(summary["multi"]["runs"][0]["rows"]), len(HELDOUT_CONFIGS))
 
 
+class AgreementTests(unittest.TestCase):
+    """v0.28：与 BFS 的一致率诊断（回答"它是不是在照抄"）。"""
+
+    def test_agreement_is_reported_and_bounded(self) -> None:
+        from lab.diag import measure_agreement
+        from lab.linear import WeightedMultiHeadAgent
+
+        agent = WeightedMultiHeadAgent(seed=0)
+        stats = measure_agreement(agent, eval_seeds(3), 30, size=10, layout="corridor", hazards=6)
+        self.assertGreater(stats["steps"], 0)
+        self.assertGreaterEqual(stats["agreement"], 0.0)
+        self.assertLessEqual(stats["agreement"], 1.0)
+
+    def test_policy_does_not_copy_bfs(self) -> None:
+        """核心结论：有规划特征时，一致率仍然远低于 100%（不是复制品）。"""
+        from lab.diag import measure_agreement
+        from lab.linear import WeightedMultiHeadAgent
+        from lab.tasks import train, train_seeds
+
+        agent = WeightedMultiHeadAgent(seed=0)
+        for _ in range(2):
+            train(agent, train_seeds(12), 120, epsilon=0.3, size=10, layout="corridor",
+                  hazards=6, with_path=True)
+        stats = measure_agreement(agent, eval_seeds(3), 120, size=10, layout="corridor",
+                                  hazards=6, with_path=True)
+        self.assertLess(stats["agreement"], 0.8, msg=f"一致率 {stats['agreement']} 太高，可能在照抄")
+
+    def test_transfer_with_path_runs(self) -> None:
+        summary = run_transfer(rounds=1, episodes=4, steps=20, eval_count=3, with_path=True)
+        self.assertTrue(summary["with_path"])
+
+
 class NextStepFeatureTests(unittest.TestCase):
     """v0.27：把"该往哪走"塞进特征。"""
 

@@ -129,6 +129,7 @@ python -m lab.cli verify                            # 账本/状态机/知识库
 | `lab/perm.py` | 权限申请/批准 + **自主级别（locked/supervised/full）** | `ask` / `grant` / `deny` / `perms` / `autonomy` | ✅ |
 | `lab/transfer.py` | 跨任务迁移实验（三套任务族 / 多种子 / 95% 区间） | `transfer [--algo] [--family core\|wide\|corridor] [--repeats N]` | ✅ wide 通过；corridor 未通过（实验 0011） |
 | `lab/neural.py` | 纯 Python 单隐层 MLP 策略（25→16→5，手写反向传播） | `--algo neural` | 🟡 小样本下不如线性（实验 0012） |
+| `lab/diag.py` | 与 BFS 动作一致率诊断（判断是学会还是照抄） | `diag` / 代码内调用 | ✅ 一致率 16–23%（实验 0016） |
 | `lab/plugins/` | 插件接口（manifest + 红线 + 预算声明） | — | ⬜ 下一版 |
 | `lab/loop.py` | 自驱循环（不需逐条敲命令） | `loop` | ⬜ v0.3 下一步 |
 

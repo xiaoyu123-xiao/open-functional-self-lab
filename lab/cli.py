@@ -748,6 +748,7 @@ def cmd_transfer(args: argparse.Namespace, ctx: Context) -> int:
         algo=args.algo,
         repeats=args.repeats,
         family=args.family,
+        with_path=args.with_path,
     )
     _emit(format_transfer(summary))
     ctx.ledger.append(
@@ -1319,7 +1320,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_transfer.add_argument("--eval-count", type=int, default=20)
     p_transfer.add_argument("--algo", choices=["tabular", "linear", "multihead", "weighted", "neural"], default="tabular")
     p_transfer.add_argument("--repeats", type=int, default=1, help="用几组不同的初始种子重复，默认 1")
-    p_transfer.add_argument("--family", choices=["core", "wide", "corridor"], default="core", help="任务族：core=只变危险区；wide=再变地图尺寸")
+    p_transfer.add_argument("--family", choices=["core", "wide", "corridor"], default="core", help="任务族：core=只变危险区；wide=再变地图尺寸；corridor=走廊布局")
+    p_transfer.add_argument("--with-path", action="store_true", help="状态里加入绕行距离与下一跳方向（规划特征）")
     p_transfer.set_defaults(func=cmd_transfer)
 
     p_autonomy = sub.add_parser("autonomy", help="自主级别：locked / supervised / full（一次性给到位）")

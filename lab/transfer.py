@@ -71,12 +71,13 @@ def train_multi(
     episodes: int,
     steps: int,
     epsilon: float = 0.25,
+    with_path: bool = False,
 ) -> int:
     """在多个配置上轮流训练。返回训练总回合数。"""
     total = 0
     for _ in range(rounds):
         for config in configs:
-            train(agent, train_seeds(episodes), steps, epsilon=epsilon, **config)
+            train(agent, train_seeds(episodes), steps, epsilon=epsilon, with_path=with_path, **config)
             total += episodes
     return total
 
@@ -86,10 +87,11 @@ def evaluate_configs(
     configs: Iterable[Dict[str, Any]],
     seeds: Sequence[int],
     steps: int,
+    with_path: bool = False,
 ) -> List[Dict[str, Any]]:
     rows: List[Dict[str, Any]] = []
     for config in configs:
-        learned = evaluate(agent, seeds, steps, **config)
+        learned = evaluate(agent, seeds, steps, with_path=with_path, **config)
         baseline = baseline_score(seeds, steps, **config)
         rows.append(
             {
@@ -112,6 +114,7 @@ def run(
     algo: str = "tabular",
     repeats: int = 1,
     family: str = "core",
+    with_path: bool = False,
 ) -> Dict[str, Any]:
     if family not in FAMILIES:
         raise ValueError(f"family 只能是 {sorted(FAMILIES)}")
@@ -136,12 +139,12 @@ def run(
     for repeat in range(repeats):
         agent_seed = 11 + repeat
         single = make_agent(agent_seed)
-        single_episodes = train_multi(single, [train_configs[0]], rounds, episodes, steps)
-        single_rows = evaluate_configs(single, heldout_configs, seeds, steps)
+        single_episodes = train_multi(single, [train_configs[0]], rounds, episodes, steps, with_path=with_path)
+        single_rows = evaluate_configs(single, heldout_configs, seeds, steps, with_path=with_path)
 
         multi = make_agent(agent_seed)
-        multi_episodes = train_multi(multi, train_configs, rounds, episodes, steps)
-        multi_rows = evaluate_configs(multi, heldout_configs, seeds, steps)
+        multi_episodes = train_multi(multi, train_configs, rounds, episodes, steps, with_path=with_path)
+        multi_rows = evaluate_configs(multi, heldout_configs, seeds, steps, with_path=with_path)
 
         single_mean = sum(row["learned"] for row in single_rows) / len(single_rows)
         multi_mean = sum(row["learned"] for row in multi_rows) / len(multi_rows)
@@ -172,6 +175,7 @@ def run(
     return {
         "algo": algo,
         "family": family,
+        "with_path": with_path,
         "repeats": repeats,
         "seeds": list(seeds),
         "steps": steps,
