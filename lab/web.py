@@ -49,6 +49,30 @@ def is_allowed(url: str) -> bool:
     return any(host == allowed or host.endswith("." + allowed) for allowed in ALLOWLIST)
 
 
+def parse_atom_entries(text: str, limit: int = 10) -> List[Dict[str, str]]:
+    """把 arXiv/Atom 的返回拆成逐条论文（title / summary / url）。
+
+    v0.38：之前只取整份 feed 的标题，等于什么都没取到——这是取样器的缺陷。
+    """
+    import re
+
+    entries: List[Dict[str, str]] = []
+    for block in re.findall(r"<entry>(.*?)</entry>", text, flags=re.S)[:limit]:
+        title = re.search(r"<title>(.*?)</title>", block, flags=re.S)
+        summary = re.search(r"<summary>(.*?)</summary>", block, flags=re.S)
+        link = re.search(r"<id>(.*?)</id>", block, flags=re.S)
+        if not title:
+            continue
+        entries.append(
+            {
+                "title": " ".join(title.group(1).split())[:200],
+                "summary": " ".join(summary.group(1).split())[:MAX_SUMMARY_CHARS] if summary else "",
+                "url": link.group(1).strip() if link else "",
+            }
+        )
+    return entries
+
+
 def check_url(url: str, allow_network: bool) -> str:
     if not allow_network:
         raise NotAllowed("默认离线：本次没有开启联网（需要 allow_network=True 且经人工批准）")
@@ -97,6 +121,17 @@ class LiveFetcher:
         with urllib.request.urlopen(request, timeout=self.timeout) as response:  # noqa: S310 - 白名单已校验
             raw = response.read(MAX_BYTES)
         text = raw.decode("utf-8", errors="replace")
+        entries = parse_atom_entries(text)
+        if entries:
+            return {
+                "url": url,
+                "title": f"{len(entries)} 篇",
+                "summary": "",
+                "entries": entries,
+                "fetched_at": "",
+                "bytes": len(raw),
+                "fetcher": self.name,
+            }
         summary = " ".join(text.split())[:MAX_SUMMARY_CHARS]
         return {
             "url": url,
@@ -122,7 +157,23 @@ def fetch_many(
                 errors.append({"url": url, "reason": f"预算拦截：{error}"})
                 break
         try:
-            documents.append(fetcher.fetch(url))
+            document = fetcher.fetch(url)
         except Exception as error:  # 单条失败不影响其它
             errors.append({"url": url, "reason": f"{type(error).__name__}: {error}"})
+            continue
+        entries = document.get("entries") if isinstance(document, dict) else None
+        if entries:                      # v0.38：Atom/arXiv 一次返回多篇，逐篇入库
+            for entry in entries:
+                documents.append(
+                    {
+                        "url": entry.get("url") or url,
+                        "title": entry.get("title", "")[:200],
+                        "summary": entry.get("summary", "")[:MAX_SUMMARY_CHARS],
+                        "fetched_at": document.get("fetched_at", ""),
+                        "bytes": len(entry.get("summary", "").encode("utf-8")),
+                        "fetcher": document.get("fetcher", "live"),
+                    }
+                )
+        else:
+            documents.append(document)
     return documents, errors

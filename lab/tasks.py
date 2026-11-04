@@ -11,6 +11,7 @@
 
 from __future__ import annotations
 
+import math
 from typing import Any, Dict, List, Sequence, Tuple
 
 from .agent import (
@@ -68,11 +69,14 @@ def run_episode(
     survival_bonus: float = 0.0,
     death_penalty: float = -5.0,
     bonus_requires_progress: bool = False,
+    shaping: str = "legacy",
+    explore_bonus: float = 0.0,
 ) -> Dict[str, Any]:
     environment = GridWorld(seed, hazards=hazards, lethal=lethal, armor=armor, size=size, layout=layout, slippery=slippery, hazard_drift=hazard_drift, one_hit=one_hit)
     state = state_of(environment, with_walls=with_walls, with_path=with_path)
     total_reward = 0.0
     ate = hurt = 0
+    visits: Dict[str, int] = {}
     for _ in range(steps):
         action = agent.act(state, epsilon=epsilon) if train else agent.best_action(state)
         previous_distance = _distance_to_food(environment)
@@ -80,8 +84,11 @@ def run_episode(
         following = state_of(environment, with_walls=with_walls, with_path=with_path)
         reward = reward_of(
             previous_distance, environment, outcome,
-            hurt_penalty=hurt_penalty, survival_bonus=survival_bonus,
+            hurt_penalty=hurt_penalty, survival_bonus=survival_bonus, shaping=shaping,
         )
+        if explore_bonus:                       # 计数式内在动机（v0.38）
+            visits[state] = visits.get(state, 0) + 1
+            reward += explore_bonus / math.sqrt(visits[state])
         if bonus_requires_progress and survival_bonus != 0.0:
             # "按劳分配"：只有真的靠近了食物，才拿存活奖励（对应实验 0025 的 workfare 组）
             if _distance_to_food(environment) >= previous_distance:
@@ -128,6 +135,8 @@ def train(
     survival_bonus: float = 0.0,
     death_penalty: float = -5.0,
     bonus_requires_progress: bool = False,
+    shaping: str = "legacy",
+    explore_bonus: float = 0.0,
 ) -> Dict[str, Any]:
     results = [
         run_episode(
@@ -146,9 +155,9 @@ def train(
     }
 
 
-def evaluate(agent: QLearningAgent, seeds: Sequence[int], steps: int, hazards: int = 4, with_walls: bool = False, lethal: bool = False, armor: bool = False, size: int = 8, layout: str = "random", with_path: bool = False, slippery: float = 0.0, hazard_drift: int = 0, hurt_penalty: float = -1.0, one_hit: bool = False, survival_bonus: float = 0.0, death_penalty: float = -5.0, bonus_requires_progress: bool = False) -> Dict[str, Any]:
+def evaluate(agent: QLearningAgent, seeds: Sequence[int], steps: int, hazards: int = 4, with_walls: bool = False, lethal: bool = False, armor: bool = False, size: int = 8, layout: str = "random", with_path: bool = False, slippery: float = 0.0, hazard_drift: int = 0, hurt_penalty: float = -1.0, one_hit: bool = False, survival_bonus: float = 0.0, death_penalty: float = -5.0, bonus_requires_progress: bool = False, shaping: str = "legacy", explore_bonus: float = 0.0) -> Dict[str, Any]:
     """固定 seed、固定步数、**不学习**。这是唯一被允许用来宣称"变强了"的分数。"""
-    results = [run_episode(agent, seed, steps, train=False, hazards=hazards, with_walls=with_walls, lethal=lethal, armor=armor, size=size, layout=layout, with_path=with_path, slippery=slippery, hazard_drift=hazard_drift, hurt_penalty=hurt_penalty, one_hit=one_hit, survival_bonus=survival_bonus, death_penalty=death_penalty, bonus_requires_progress=bonus_requires_progress) for seed in seeds]
+    results = [run_episode(agent, seed, steps, train=False, hazards=hazards, with_walls=with_walls, lethal=lethal, armor=armor, size=size, layout=layout, with_path=with_path, slippery=slippery, hazard_drift=hazard_drift, hurt_penalty=hurt_penalty, one_hit=one_hit, survival_bonus=survival_bonus, death_penalty=death_penalty, bonus_requires_progress=bonus_requires_progress, shaping=shaping, explore_bonus=explore_bonus) for seed in seeds]
     return {
         "episodes": len(results),
         "mean_return": round(sum(item["return"] for item in results) / len(results), 4),
@@ -158,7 +167,7 @@ def evaluate(agent: QLearningAgent, seeds: Sequence[int], steps: int, hazards: i
     }
 
 
-def baseline_score(seeds: Sequence[int], steps: int, hazards: int = 4, lethal: bool = False, armor: bool = False, size: int = 8, layout: str = "random", with_path: bool = False, slippery: float = 0.0, hazard_drift: int = 0, hurt_penalty: float = -1.0, one_hit: bool = False, survival_bonus: float = 0.0, death_penalty: float = -5.0, bonus_requires_progress: bool = False) -> Dict[str, Any]:
+def baseline_score(seeds: Sequence[int], steps: int, hazards: int = 4, lethal: bool = False, armor: bool = False, size: int = 8, layout: str = "random", with_path: bool = False, slippery: float = 0.0, hazard_drift: int = 0, hurt_penalty: float = -1.0, one_hit: bool = False, survival_bonus: float = 0.0, death_penalty: float = -5.0, bonus_requires_progress: bool = False, shaping: str = "legacy", explore_bonus: float = 0.0) -> Dict[str, Any]:
     """对照组：BFS 贪心基线（就是 v0.1–v0.3 用的那个）。"""
     total = 0.0
     ate = hurt = 0

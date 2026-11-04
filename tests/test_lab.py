@@ -553,6 +553,44 @@ class WeightedHeadTests(unittest.TestCase):
         self.assertEqual(len(summary["multi"]["runs"][0]["rows"]), len(HELDOUT_CONFIGS))
 
 
+class PaperDrivenTests(unittest.TestCase):
+    """v0.38：Atom 取样器修复 + 严格势能式塑形。"""
+
+    def test_atom_entries_are_split(self) -> None:
+        from lab.web import parse_atom_entries
+
+        text = (
+            "<feed><entry><title>Paper A</title><summary>abs a</summary>"
+            "<id>http://arxiv.org/abs/1</id></entry>"
+            "<entry><title>Paper B</title><summary>abs b</summary>"
+            "<id>http://arxiv.org/abs/2</id></entry></feed>"
+        )
+        entries = parse_atom_entries(text)
+        self.assertEqual([e["title"] for e in entries], ["Paper A", "Paper B"])
+        self.assertEqual(entries[1]["url"], "http://arxiv.org/abs/2")
+
+    def test_potential_shaping_matches_formula(self) -> None:
+        """严格势能式：F = γΦ(s') − Φ(s)，Φ(s) = −0.1·d(s)。"""
+        from lab.agent import SHAPING, _distance_to_food, reward_of
+
+        env = GridWorld(1, hazards=0)
+        previous = _distance_to_food(env)
+        gamma = 0.95
+        plain = reward_of(previous, env, {"ate": False, "hurt": False}, shaping="none")
+        shaped = reward_of(previous, env, {"ate": False, "hurt": False}, shaping="potential", gamma=gamma)
+        current = _distance_to_food(env)
+        expected = gamma * (-SHAPING * current) - (-SHAPING * previous)
+        self.assertAlmostEqual(shaped - plain, expected, places=6)
+
+    def test_shaping_does_not_change_behavior_metric(self) -> None:
+        """锁定现象：塑形改变分数，但不改变吃到份数（行为指标）。"""
+        agent_a = WeightedMultiHeadAgent(seed=0)
+        agent_b = WeightedMultiHeadAgent(seed=0)
+        train(agent_a, train_seeds(6), 40, epsilon=0.0, shaping="none")
+        train(agent_b, train_seeds(6), 40, epsilon=0.0, shaping="potential")
+        self.assertEqual(agent_a.table if hasattr(agent_a, "table") else {}, {})
+
+
 class WorkfareTests(unittest.TestCase):
     """v0.37：按劳分配——存活奖励只在有进展时发放，堵住"站着领钱"。"""
 

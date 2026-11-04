@@ -269,6 +269,8 @@ def reward_of(
     outcome: Dict[str, Any],
     hurt_penalty: float = HURT_PENALTY,
     survival_bonus: float = 0.0,
+    shaping: str = "legacy",
+    gamma: float = 0.95,
 ) -> float:
     """奖励设计：吃到 +1、受伤 hurt_penalty（默认 -1）、每步小惩罚、靠近食物给 shaping。"""
     reward = -0.01 + survival_bonus
@@ -277,5 +279,10 @@ def reward_of(
     if outcome.get("hurt"):
         reward += hurt_penalty
     current = _distance_to_food(env)
-    reward += SHAPING * (previous_distance - current)
+    if shaping == "potential":
+        # 严格势能式（Ng, Harada & Russell 1999）：F = γΦ(s') − Φ(s)，Φ(s) = −0.1·d(s)
+        # 这种形式保证不改变最优策略；我们原来的写法少了 γ 因子。
+        reward += (gamma * SHAPING * (-current)) - (SHAPING * (-previous_distance))
+    else:
+        reward += SHAPING * (previous_distance - current)
     return reward
