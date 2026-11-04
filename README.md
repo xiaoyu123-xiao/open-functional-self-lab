@@ -59,7 +59,7 @@ python -m unittest discover -s tests -v
 ### 已验证（本机 2026-11-04，Windows 11 / Python 3.13.15）
 
 ```
-doctor  9 项检查全通过
+doctor  10 项检查全通过
 init    → state/state.json + state/ledger.jsonl
 run     → 20 步，checkpoint 落盘，账本 +65 条（合计 67 条）
 verify  哈希链完整 / 状态机重放 4 次 / checkpoint 带锚点 / 预算未超限

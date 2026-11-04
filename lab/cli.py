@@ -179,6 +179,29 @@ def _check_policy(ctx: Context) -> Tuple[str, str]:
     return "OK", "红线扫描无命中"
 
 
+def _check_ps1_bom(root: Path) -> Tuple[str, str]:
+    """含中文的 .ps1 必须带 UTF-8 BOM。
+
+    Windows PowerShell 5.1 读无 BOM 的 UTF-8 会按 ANSI 解码，中文变乱码后连引号都配对不上，
+    报 "字符串缺少终止符"。这个坑在写 publish.ps1 时真踩过，所以做成检查。
+    """
+    skip = {".git", "state", "__pycache__", ".venv"}
+    offenders: List[str] = []
+    checked = 0
+    for path in sorted(root.rglob("*.ps1")):
+        if any(part in skip for part in path.relative_to(root).parts[:-1]):
+            continue
+        checked += 1
+        raw = path.read_bytes()
+        if raw.startswith(b"\xef\xbb\xbf"):
+            continue
+        if any(byte > 127 for byte in raw):
+            offenders.append(path.relative_to(root).as_posix())
+    if offenders:
+        return "FAIL", "缺 UTF-8 BOM（PowerShell 5.1 会报“字符串缺少终止符”）：" + ", ".join(offenders)
+    return "OK", f"{checked} 个 .ps1 均可用"
+
+
 def _check_version(root: Path) -> Tuple[str, str]:
     pyproject = root / "pyproject.toml"
     if not pyproject.exists():
@@ -198,6 +221,7 @@ def cmd_doctor(args: argparse.Namespace, ctx: Context) -> int:
         ("state-dir", _check_state_dir(ctx)),
         ("config", _check_config(ctx)),
         ("version", _check_version(ctx.root)),
+        ("ps1-bom", _check_ps1_bom(ctx.root)),
         ("policy", _check_policy(ctx)),
         ("git", _check_git()),
         ("disk", _check_disk(ctx.root)),
