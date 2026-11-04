@@ -553,6 +553,27 @@ class WeightedHeadTests(unittest.TestCase):
         self.assertEqual(len(summary["multi"]["runs"][0]["rows"]), len(HELDOUT_CONFIGS))
 
 
+class L10Tests(unittest.TestCase):
+    """v0.42：12 组显著不能定稿（探索奖励在 20 组时失效）。"""
+
+    def test_small_sample_significance_is_not_enough(self) -> None:
+        from lab.lessons import ExperimentReport, check_experiment
+
+        report = ExperimentReport(name="twelve", repeats=12, primary_metric="ate",
+                                  diff_ci=(0.7, 10.8), claims_significant=True,
+                                  same_reward_baseline=True, idle_control=True)
+        problems = check_experiment(report)
+        self.assertTrue(any("L10" in item for item in problems))
+
+    def test_twenty_repeats_may_claim(self) -> None:
+        from lab.lessons import ExperimentReport, check_experiment
+
+        report = ExperimentReport(name="twenty", repeats=20, primary_metric="ate",
+                                  diff_ci=(0.5, 4.0), claims_significant=True,
+                                  same_reward_baseline=True, idle_control=True)
+        self.assertEqual(check_experiment(report), [])
+
+
 class ParameterWiringTests(unittest.TestCase):
     """v0.41：train 必须把 shaping/explore_bonus/bonus_requires_progress 传给 run_episode。
 

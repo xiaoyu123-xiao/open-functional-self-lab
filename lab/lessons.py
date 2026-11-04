@@ -54,6 +54,9 @@ LESSONS: Sequence[Lesson] = (
     Lesson("L08", "没有收益的改动必须回退，并在代码里留注释指向实验记录",
            "v0.26 把塑形换成 BFS 距离后更差，已回退",
            "doc:docs/experiments/0014-three-attempts.md", "v0.26"),
+    Lesson("L10", "12 组的显著不足以定稿：必须在 ≥20 组上复现且区间仍不含 0",
+           "v0.41 的探索奖励 +5.75（11/12）在 20 组时缩到 +3.20 且区间含 0",
+           "test:test_small_sample_significance_is_not_enough", "v0.42"),
     Lesson("L09", "改代码前先看外部资料，但落地时必须配一次本地消融",
            "委托人提醒：论文与自己推要结合，不能只做一半",
            "doc:docs/MEMORY-PROTOCOL.md", "v0.39"),
@@ -83,6 +86,7 @@ class ExperimentReport:
     idle_control: bool = False
     feature_stats: Optional[Dict[str, float]] = None
     literature_refs: List[str] = field(default_factory=list)
+    claims_significant: bool = False
 
 
 def check_experiment(report: ExperimentReport) -> List[str]:
@@ -91,6 +95,8 @@ def check_experiment(report: ExperimentReport) -> List[str]:
 
     if report.repeats < 10:
         violations.append(f"L01 重复次数不足：{report.repeats} < 10")
+    if report.repeats < 20 and report.claims_significant:
+        violations.append(f"L10 样本 {report.repeats} < 20：不能声称'显著'，只能说'待复现'")
 
     if report.primary_metric in {"mean_return", "score", "reward"}:
         violations.append(
