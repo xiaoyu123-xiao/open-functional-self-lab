@@ -31,6 +31,7 @@ from .notify import DEDUPE_HOURS, LEVELS, Notifier
 from .predict import benchmark as run_benchmark
 from .collab import analyse as analyse_behaviour
 from .core import evaluate_policy, load_object, run_generic_episode
+from .lessons import ExperimentReport, check_experiment, summary as lessons_summary
 from .collab import build_proposals, emergent_gap, record_choice
 from .knowledge import KnowledgeBase
 from .perm import Permissions
@@ -619,6 +620,33 @@ def cmd_review(args: argparse.Namespace, ctx: Context) -> int:
     ctx.ledger.append("transition", record, ctx.clock.now_iso(), actor=f"human:{args.by}")
     _emit("评审不通过：已回滚到 READY，请先看 state/reports/ 再决定下一步。")
     return EXIT_OK
+
+
+# ---------------------------------------------------------------- lessons
+
+
+def cmd_lessons(args: argparse.Namespace, ctx: Context) -> int:
+    if args.repeats is None and not args.check:
+        _emit(lessons_summary())
+        return EXIT_OK
+
+    report = ExperimentReport(
+        name=args.name or "(未命名)",
+        repeats=args.repeats if args.repeats is not None else 1,
+        diff_ci=(args.ci[0], args.ci[1]) if args.ci else None,
+        primary_metric=args.metric,
+        same_reward_baseline=args.same_reward_baseline,
+        reward_changed=args.reward_changed,
+        idle_control=args.idle_control,
+    )
+    violations = check_experiment(report)
+    if not violations:
+        _emit("检查通过：这份结果可以下结论。")
+        return EXIT_OK
+    _emit(f"违背 {len(violations)} 条教训，建议先修再下结论：")
+    for item in violations:
+        _emit(f"  - {item}")
+    return EXIT_FAIL
 
 
 # ---------------------------------------------------------------- db / ask / grant
@@ -1343,6 +1371,17 @@ def build_parser() -> argparse.ArgumentParser:
     p_auto.add_argument("--lethal", action="store_true")
     p_auto.add_argument("--armor", action="store_true")
     p_auto.set_defaults(func=cmd_auto)
+
+    p_lessons = sub.add_parser("lessons", help="教训库：列出/校验一次实验的凭据")
+    p_lessons.add_argument("--check", action="store_true", help="按教训检查这份结果")
+    p_lessons.add_argument("--name", default=None)
+    p_lessons.add_argument("--repeats", type=int, default=None)
+    p_lessons.add_argument("--ci", type=float, nargs=2, default=None, metavar=("LOW", "HIGH"))
+    p_lessons.add_argument("--metric", default="mean_return", help="主指标（建议 ate/hurt/steps）")
+    p_lessons.add_argument("--reward-changed", action="store_true")
+    p_lessons.add_argument("--same-reward-baseline", action="store_true")
+    p_lessons.add_argument("--idle-control", action="store_true")
+    p_lessons.set_defaults(func=cmd_lessons)
 
     p_db = sub.add_parser("db", help="持久层：sync / stats / backup")
     p_db.add_argument("action", nargs="?", default="stats", choices=["stats", "sync", "backup"])

@@ -553,6 +553,37 @@ class WeightedHeadTests(unittest.TestCase):
         self.assertEqual(len(summary["multi"]["runs"][0]["rows"]), len(HELDOUT_CONFIGS))
 
 
+class LessonRegistryTests(unittest.TestCase):
+    """v0.39：教训必须"有牙齿"——每条都能指向真实存在的执行位置。"""
+
+    def test_every_lesson_has_enforcement(self) -> None:
+        import pathlib as _pathlib
+        import sys as _sys
+
+        _sys.path.insert(0, str(_pathlib.Path(__file__).resolve().parents[1] / "scripts"))
+        from precheck_experiment import missing_enforcements
+
+        self.assertEqual(missing_enforcements(), [])
+
+    def test_check_experiment_flags_bad_report(self) -> None:
+        from lab.lessons import ExperimentReport, check_experiment
+
+        report = ExperimentReport(name="bad", repeats=3, primary_metric="mean_return",
+                                  reward_changed=True, diff_ci=(-0.1, 0.4))
+        violations = check_experiment(report)
+        self.assertTrue(any("L01" in v for v in violations))
+        self.assertTrue(any("L02" in v for v in violations))
+        self.assertTrue(any("L03" in v for v in violations))
+
+    def test_check_experiment_accepts_good_report(self) -> None:
+        from lab.lessons import ExperimentReport, check_experiment
+
+        report = ExperimentReport(name="good", repeats=12, primary_metric="ate",
+                                  reward_changed=True, same_reward_baseline=True,
+                                  idle_control=True, diff_ci=(0.2, 0.9))
+        self.assertEqual(check_experiment(report), [])
+
+
 class PaperDrivenTests(unittest.TestCase):
     """v0.38：Atom 取样器修复 + 严格势能式塑形。"""
 

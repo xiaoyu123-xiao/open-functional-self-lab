@@ -17,6 +17,8 @@
 > - 只看成果总结 → [`docs/EXPERIMENTS-SUMMARY.md`](docs/EXPERIMENTS-SUMMARY.md)（九次实验，八次是坑）
 > - 想看三个真实接入例子 → [`examples/`](examples/README.md)（评测台 / 模型包装 / 带预算取样）
 > - 担心它会碰我电脑 → [`docs/security-audit.md`](docs/security-audit.md)（含自查命令）
+> - **上下文丢了先读** → [`docs/MEMORY-PROTOCOL.md`](docs/MEMORY-PROTOCOL.md)（记忆四步流 + 恢复顺序）
+> - 犯过的错清单 → `python -m lab.cli lessons`（9 条，每条都有执行位置）
 > - 别的语言 → [`docs/i18n.md`](docs/i18n.md)（现状 + 怎么加）
 > - 全貌 → [`docs/MASTER.md`](docs/MASTER.md)
 >
