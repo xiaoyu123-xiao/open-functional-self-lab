@@ -505,9 +505,13 @@ class TransferTests(unittest.TestCase):
             self.assertIn(key, summary)
         self.assertIsInstance(summary["transfer_helped"], bool)
         self.assertEqual(len(summary["multi"]["runs"][0]["rows"]), len(HELDOUT_CONFIGS))
-        # 判据 v2：胜率 ≥80% 且均值不下降
-        expected = summary["win_rate"] >= 0.8 and summary["multi"]["mean"] >= summary["single"]["mean"]
-        self.assertEqual(summary["transfer_helped"], expected)
+        # 判据 v3：胜率 ≥80% 且均值不下降 且 95% 区间不含 0
+        v2 = summary["win_rate"] >= 0.8 and summary["multi"]["mean"] >= summary["single"]["mean"]
+        self.assertEqual(summary["v2_helped"], v2)
+        ci = summary["ci95"]
+        v3 = v2 and ci[0] is not None and ci[0] > 0
+        self.assertEqual(summary["transfer_helped"], v3)
+        self.assertEqual(summary["criterion"], "v3")
 
     def test_transfer_supports_linear_algo(self) -> None:
         summary = run_transfer(rounds=1, episodes=5, steps=20, eval_count=3, algo="linear")

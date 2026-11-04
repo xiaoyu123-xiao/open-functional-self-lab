@@ -18,6 +18,7 @@
 
 from __future__ import annotations
 
+import math
 from typing import Any, Dict, Iterable, List, Sequence, Tuple
 
 from .agent import QLearningAgent
@@ -45,7 +46,21 @@ WIDE_HELDOUT_CONFIGS: Tuple[Dict[str, Any], ...] = (
     {"hazards": 10, "lethal": True, "size": 10},
 )
 
-FAMILIES = {"core": (TRAIN_CONFIGS, HELDOUT_CONFIGS), "wide": (WIDE_TRAIN_CONFIGS, WIDE_HELDOUT_CONFIGS)}
+CORRIDOR_TRAIN_CONFIGS: Tuple[Dict[str, Any], ...] = (
+    {"hazards": 4, "lethal": True, "size": 8, "layout": "corridor"},
+    {"hazards": 6, "lethal": True, "size": 10, "layout": "corridor"},
+    {"hazards": 4, "lethal": False, "size": 8, "layout": "corridor"},
+)
+CORRIDOR_HELDOUT_CONFIGS: Tuple[Dict[str, Any], ...] = (
+    {"hazards": 6, "lethal": True, "size": 12, "layout": "corridor"},
+    {"hazards": 10, "lethal": True, "size": 10, "layout": "corridor"},
+)
+
+FAMILIES = {
+    "core": (TRAIN_CONFIGS, HELDOUT_CONFIGS),
+    "wide": (WIDE_TRAIN_CONFIGS, WIDE_HELDOUT_CONFIGS),
+    "corridor": (CORRIDOR_TRAIN_CONFIGS, CORRIDOR_HELDOUT_CONFIGS),
+}
 
 
 def train_multi(
@@ -143,6 +158,12 @@ def run(
         return round((sum((v - avg) ** 2 for v in values) / (len(values) - 1)) ** 0.5, 4)
 
     diffs = [m - s for s, m in zip(single_means, multi_means)]
+    diff_sd = _std(diffs)
+    if len(diffs) >= 2:
+        half = 1.96 * diff_sd / math.sqrt(len(diffs))
+        ci_low, ci_high = round(_mean(diffs) - half, 4), round(_mean(diffs) + half, 4)
+    else:
+        ci_low = ci_high = None
     wins = sum(1 for d in diffs if d > 0)
     ratio_mean = _mean(ratios)
     return {
@@ -157,11 +178,21 @@ def run(
         "ratio_std": _std(ratios),
         "ratios": [round(r, 4) for r in ratios],
         "diff_mean": _mean(diffs),
+        "ci95": [ci_low, ci_high],
+        "excludes_zero": bool(ci_low is not None and (ci_low > 0 or ci_high < 0)),
         "diff_std": _std(diffs),
         "wins": wins,
         "win_rate": round(wins / len(diffs), 4) if diffs else 0.0,
-        # 判据 v2（v0.16 修订）：比值受"分母接近 0"影响不稳定，改用配对比较
-        "transfer_helped": bool(diffs and (wins / len(diffs) >= 0.8) and (_mean(multi_means) >= _mean(single_means))),
+        # 判据 v3（v0.23 修订）：v2 只看胜率，走廊地图上出现"胜率 90% 但 95% 区间含 0"，
+        # 说明胜率单独不足以支撑结论。v3 要求：胜率 ≥80% 且均值不下降 且 95% 区间不含 0。
+        "criterion": "v3",
+        "v2_helped": bool(diffs and (wins / len(diffs) >= 0.8) and (_mean(multi_means) >= _mean(single_means))),
+        "transfer_helped": bool(
+            diffs
+            and (wins / len(diffs) >= 0.8)
+            and (_mean(multi_means) >= _mean(single_means))
+            and (ci_low is not None and ci_low > 0)
+        ),
     }
 
 
@@ -186,13 +217,21 @@ def format_report(summary: Dict[str, Any]) -> str:
         lines.append("比值：无法比较（单任务均分接近 0）")
     else:
         verdict = "迁移有帮助" if summary["transfer_helped"] else "迁移没有带来好处"
+        if summary.get("v2_helped") and not summary["transfer_helped"]:
+            verdict += "（v2 判据会通过，但 v3 要求 95% 区间不含 0，未通过）"
         lines.append(
             f"配对差（多任务 − 单任务）：{summary['diff_mean']:+.3f} ± {summary['diff_std']:.3f}，"
             f"胜率 {summary['win_rate']*100:.0f}%（{summary['wins']}/{summary['repeats']}）"
         )
+        ci = summary.get("ci95") or [None, None]
+        if ci[0] is not None:
+            lines.append(
+                f"95% 置信区间：[{ci[0]:+.3f}, {ci[1]:+.3f}]　"
+                f"{'不包含 0（差异可视为稳定）' if summary['excludes_zero'] else '包含 0（差异可能只是噪声）'}"
+            )
         lines.append(
-            f"比值 {summary['ratio']:.2f} ± {summary['ratio_std']:.2f}（逐次 {summary['ratios']}）"
+            f"比值 {summary['ratio']:.2f} ± {summary['ratio_std']:.2f}"
             " ← 仅作参考：分母接近 0 时会爆炸"
         )
-        lines.append(f"结论：{verdict}（判据 v2：胜率 ≥80% 且均值不下降）")
+        lines.append(f"结论：{verdict}（判据 v3：胜率 ≥80% 且均值不下降 且 95% 区间不含 0）")
     return "\n".join(lines)

@@ -43,9 +43,11 @@ class GridWorld:
         lethal: bool = False,
         armor: bool = False,
         size: int = SIZE,
+        layout: str = "random",
     ) -> None:
         rng = random.Random(seed)
         self.size = int(size)
+        self.layout = str(layout)
         cells = [(x, y) for x in range(self.size) for y in range(self.size)]
         rng.shuffle(cells)
 
@@ -73,7 +75,18 @@ class GridWorld:
                 reserved.add(cell)
             return picked
 
-        self.walls = set(take(int(walls)))
+        if self.layout == "corridor":
+            # 走廊式：奇数行整行是墙，只在两端留缺口 → 强制绕行
+            gap = {1, max(0, self.size - 2)}
+            self.walls = {
+                (x, y)
+                for y in range(1, self.size, 2)
+                for x in range(self.size)
+                if x not in gap
+            }
+            reserved |= self.walls
+        else:
+            self.walls = set(take(int(walls)))
         self.food = set(take(int(food)))
         self.hazards = set(take(int(hazards)))
 
