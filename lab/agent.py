@@ -97,6 +97,34 @@ def _hazard_bucket(env: GridWorld) -> str:
     return "h3"
 
 
+def _path_bucket(env: GridWorld) -> str:
+    """沿障碍绕行到最近食物的步数分档（v0.25）。
+
+    为什么需要它：走廊地图上，直线距离没用——食物可能就在左边，但要绕三行才到。
+    这是"用任务知识设计特征"，不是调参。
+    """
+    from collections import deque
+
+    if not getattr(env, "food", None):
+        return "p0"
+    start = env.position if hasattr(env, "position") else env.agent
+    frontier = deque([(start, 0)])
+    seen = {start}
+    while frontier:
+        (x, y), steps = frontier.popleft()
+        if (x, y) in env.food:
+            return "p" + str(min(3, steps // 8))
+        for dx, dy in ((0, -1), (0, 1), (-1, 0), (1, 0)):
+            nxt = (x + dx, y + dy)
+            if nxt in seen or nxt in env.walls:
+                continue
+            if not (0 <= nxt[0] < env.size and 0 <= nxt[1] < env.size):
+                continue
+            seen.add(nxt)
+            frontier.append((nxt, steps + 1))
+    return "p3"
+
+
 def _size_bucket(env: GridWorld) -> str:
     """地图尺寸分档（v0.22）：让策略知道"这是大图还是小图"。"""
     size = int(getattr(env, "size", 8))
@@ -109,7 +137,7 @@ def _size_bucket(env: GridWorld) -> str:
     return "s3"
 
 
-def state_of(env: GridWorld, with_walls: bool = False) -> str:
+def state_of(env: GridWorld, with_walls: bool = False, with_path: bool = False) -> str:
     """状态 =（食物方向 | 距离档 | 能量档 | 损伤档）。
 
     v0.5 试过加入"四方向墙体"，结果状态数 126→948、留出分数 +2.6→-0.4，已撤回。
@@ -126,6 +154,8 @@ def state_of(env: GridWorld, with_walls: bool = False) -> str:
         parts.append(_wall_code(env))
     parts.append(_hazard_bucket(env))     # v0.13：任务身份
     parts.append(_size_bucket(env))       # v0.22：地图尺寸分档
+    if with_path:
+        parts.append(_path_bucket(env))   # v0.25：沿障碍绕行距离分档
     return "|".join(parts)
 
 

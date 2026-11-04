@@ -76,14 +76,14 @@ class GridWorld:
             return picked
 
         if self.layout == "corridor":
-            # 走廊式：奇数行整行是墙，只在两端留缺口 → 强制绕行
-            gap = {1, max(0, self.size - 2)}
-            self.walls = {
-                (x, y)
-                for y in range(1, self.size, 2)
-                for x in range(self.size)
-                if x not in gap
-            }
+            # 走廊式（v0.25 改为稀疏隔断）：奇数行是隔断，每行留 2 个缺口 → 需要绕行但不至于走不通
+            gap_pool = list(range(1, self.size - 1))
+            self.walls = set()
+            for row_index, y in enumerate(range(1, self.size, 2)):
+                gaps = {gap_pool[(row_index * 2) % len(gap_pool)], gap_pool[(row_index * 2 + 3) % len(gap_pool)]}
+                for x in range(self.size):
+                    if x not in gaps:
+                        self.walls.add((x, y))
             reserved |= self.walls
         else:
             self.walls = set(take(int(walls)))
