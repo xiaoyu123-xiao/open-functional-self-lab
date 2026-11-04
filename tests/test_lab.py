@@ -403,6 +403,55 @@ class LethalTaskTests(unittest.TestCase):
         self.assertLessEqual(result["steps"], 60)
 
 
+class AutonomyTests(unittest.TestCase):
+    """v0.11：一次性授权（full）+ 无人值守（auto）。"""
+
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+        self.ledger = Ledger(self.root / "ledger.jsonl")
+        self.perms = Permissions(self.root / "perms.json")
+        self.ts = "2026-01-01T00:00:00Z"
+
+    def tearDown(self) -> None:
+        self.tmp.cleanup()
+
+    def test_full_level_grants_everything_until_revoke(self) -> None:
+        self.assertEqual(self.perms.level(), "supervised")
+        self.assertFalse(self.perms.check("web.fetch", self.ts))
+        self.perms.set_level(self.ledger, self.ts, "full", "manager", ["web.fetch", "gpu.train"], 90)
+        self.assertEqual(self.perms.level(), "full")
+        self.assertTrue(self.perms.check("web.fetch", self.ts))
+        self.assertTrue(self.perms.check("gpu.train", "2026-02-01T00:00:00Z"))
+        self.perms.revoke_all(self.ledger, self.ts, "manager")
+        self.assertEqual(self.perms.level(), "supervised")
+        self.assertFalse(self.perms.check("web.fetch", self.ts))
+
+    def test_expiry_still_applies_to_standing(self) -> None:
+        self.perms.set_level(self.ledger, self.ts, "full", "manager", ["web.fetch"], 1)
+        self.assertTrue(self.perms.check("web.fetch", "2026-01-01T12:00:00Z"))
+        self.assertFalse(self.perms.check("web.fetch", "2026-03-01T00:00:00Z"))
+
+    def test_auto_runs_and_records(self) -> None:
+        root = Path(self.tmp.name)
+        args = ["--root", str(root), "--fake-now", self.ts]
+        self.assertEqual(cli_main([*args, "init"]), 0)
+        code = cli_main([*args, "auto", "--cycles", "2", "--rounds", "1", "--episodes", "8",
+                         "--steps", "20", "--eval-count", "3"])
+        self.assertEqual(code, 0)
+        lines = (root / "state" / "ledger.jsonl").read_text(encoding="utf-8").splitlines()
+        cycles = [line for line in lines if json.loads(line).get("event") == "cycle"]
+        self.assertEqual(len(cycles), 2)
+
+    def test_auto_refuses_when_reviewing(self) -> None:
+        root = Path(self.tmp.name)
+        args = ["--root", str(root), "--fake-now", self.ts]
+        self.assertEqual(cli_main([*args, "init"]), 0)
+        self.assertEqual(cli_main([*args, "run", "--steps", "3"]), 0)   # 停在 REVIEWING
+        self.assertEqual(cli_main([*args, "auto", "--cycles", "1", "--rounds", "1", "--episodes", "5",
+                                   "--steps", "20", "--eval-count", "3"]), 1)
+
+
 class StorageAndPermissionTests(unittest.TestCase):
     """v0.10：SQLite 持久层 + 权限申请/批准。"""
 

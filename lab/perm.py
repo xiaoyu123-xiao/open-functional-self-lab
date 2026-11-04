@@ -25,6 +25,8 @@ from typing import Any, Dict, List, Optional
 from .clock import parse_iso, to_iso
 
 DEFAULT_TTL_HOURS = 24
+DEFAULT_AUTONOMY_DAYS = 90
+LEVELS = ("locked", "supervised", "full")
 
 
 class Permissions:
@@ -32,6 +34,51 @@ class Permissions:
         self.path = Path(path)
 
     # ---------- 存取 ----------
+
+    def level(self) -> str:
+        """当前自主级别：locked / supervised / full。"""
+        data = self._load()
+        return str(data.get("level", "supervised"))
+
+    def set_level(self, ledger: Any, ts: str, level: str, by: str, capabilities: List[str], days: int) -> Dict[str, Any]:
+        """一次性授权：给一个长期"标准授权"，而不是逐条批。"""
+        if level not in LEVELS:
+            raise ValueError(f"level 只能是 {LEVELS}")
+        data = self._load()
+        data["level"] = level
+        granted: List[Dict[str, Any]] = []
+        if level == "full":
+            expires = to_iso(parse_iso(ts) + timedelta(days=int(days)))
+            data["grants"] = [g for g in data["grants"] if g.get("scope") != "standing"]
+            for capability in capabilities:
+                grant = {
+                    "request_id": "standing",
+                    "resource": capability,
+                    "scope": "standing",
+                    "by": by,
+                    "granted_at": ts,
+                    "expires_at": expires,
+                }
+                data["grants"].append(grant)
+                granted.append(grant)
+        self._save(data)
+        ledger.append(
+            "autonomy",
+            {"level": level, "by": by, "capabilities": capabilities if level == "full" else [], "days": int(days)},
+            ts,
+            actor=f"human:{by}",
+        )
+        return {"level": level, "granted": granted}
+
+    def revoke_all(self, ledger: Any, ts: str, by: str) -> int:
+        """一键收回所有标准授权，并降回 supervised。"""
+        data = self._load()
+        before = len(data["grants"])
+        data["grants"] = []
+        data["level"] = "supervised"
+        self._save(data)
+        ledger.append("autonomy", {"level": "supervised", "by": by, "revoked": before}, ts, actor=f"human:{by}")
+        return before
 
     def _load(self) -> Dict[str, Any]:
         if not self.path.exists():
@@ -97,9 +144,10 @@ class Permissions:
         data = self._load()
         moment = parse_iso(now)
         for grant in data["grants"]:
-            if grant["resource"] != resource:
+            if grant["resource"] != resource and grant["resource"] != "*":
                 continue
-            if scope is not None and grant.get("scope") != scope:
+            # standing 授权覆盖任意 scope；逐条授权要求 scope 对得上
+            if scope is not None and grant.get("scope") not in ("standing", scope):
                 continue
             if parse_iso(grant["expires_at"]) < moment:
                 continue
@@ -111,7 +159,8 @@ class Permissions:
 
     def describe(self, now: str) -> str:
         data = self._load()
-        lines = [f"申请 {len(data['requests'])} 条，其中待批 {len(self.pending())} 条；已批准 {len(data['grants'])} 条"]
+        lines = [f"自主级别：{self.level()}（locked=只本地 / supervised=逐条批 / full=标准授权）"]
+        lines.append(f"申请 {len(data['requests'])} 条，其中待批 {len(self.pending())} 条；已批准 {len(data['grants'])} 条")
         for item in data["requests"]:
             if item.get("status") == "pending":
                 lines.append(f"  待批 {item['id']}：{item['resource']}（{item['reason']}）")

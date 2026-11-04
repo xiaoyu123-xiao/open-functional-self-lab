@@ -677,6 +677,79 @@ def cmd_perms(args: argparse.Namespace, ctx: Context) -> int:
     return EXIT_OK
 
 
+# ---------------------------------------------------------------- autonomy / auto
+
+
+DEFAULT_CAPABILITIES = ("web.fetch", "gpu.train", "storage.write", "repo.private-read")
+
+
+def cmd_autonomy(args: argparse.Namespace, ctx: Context) -> int:
+    perms = ctx.permissions()
+    if args.revoke:
+        revoked = perms.revoke_all(ctx.ledger, ctx.clock.now_iso(), args.by)
+        _emit(f"已收回 {revoked} 条标准授权，级别降回 supervised。")
+        return EXIT_OK
+    if not args.level:
+        _emit(perms.describe(ctx.clock.now_iso()))
+        return EXIT_OK
+    capabilities = [item.strip() for item in (args.capabilities or ",".join(DEFAULT_CAPABILITIES)).split(",") if item.strip()]
+    try:
+        result = perms.set_level(ctx.ledger, ctx.clock.now_iso(), args.level, args.by, capabilities, args.days)
+    except ValueError as error:
+        _emit(f"设置失败：{error}")
+        return EXIT_USAGE
+    if args.level == "full":
+        _emit(f"已设为 full：{len(result['granted'])} 项标准授权，有效期 {args.days} 天")
+        for grant in result["granted"]:
+            _emit(f"  {grant['resource']}　到期 {grant['expires_at']}")
+        _emit("它之后可以自己联网取样、自己训练，不再逐条申请。随时用 --revoke 收回。")
+    else:
+        _emit(f"已设为 {args.level}。")
+    return EXIT_OK
+
+
+def cmd_auto(args: argparse.Namespace, ctx: Context) -> int:
+    """无人值守：连续跑，遇预算/冻结/待评审就停。"""
+    import time
+
+    if ctx.store.status() == "REVIEWING":
+        _emit("上一轮还没评审：先 review --pass/--fail，再开自动模式。")
+        return EXIT_FAIL
+    if ctx.store.status() == "FROZEN":
+        _emit("已冻结：先 unfreeze。")
+        return EXIT_FAIL
+
+    level = ctx.permissions().level()
+    _emit(f"自动模式启动：{args.cycles} 轮，自主级别 {level}，间隔 {args.interval}s")
+    completed = 0
+    for index in range(1, args.cycles + 1):
+        try:
+            result = run_cycle(
+                policy_path=ctx.state_dir / "policy.json",
+                ledger=ctx.ledger,
+                ts=ctx.clock.now_iso(),
+                rounds=args.rounds,
+                episodes_per_round=args.episodes,
+                steps=args.steps,
+                eval_count=args.eval_count,
+                hazards=args.hazards,
+                lethal=args.lethal,
+                armor=args.armor,
+            )
+        except BudgetExceeded as error:
+            _emit(f"预算拦截，自动停止：{error}")
+            break
+        completed += 1
+        delta = result["after"]["mean_return"] - result["before"]["mean_return"]
+        _emit(f"[{index}/{args.cycles}] 留出 {result['after']['mean_return']:+.3f}"
+              f"（变化 {delta:+.3f}，{'保留' if result['improved'] else '回滚'}）"
+              f" 账本 #{result['record_seq']}")
+        if args.interval > 0 and index < args.cycles:
+            time.sleep(args.interval)
+    _emit(f"自动模式结束：完成 {completed} 轮。下一步可以 collaborate 看它建议，或 emergent 看行为变化。")
+    return EXIT_OK
+
+
 # ---------------------------------------------------------------- collaborate / emergent
 
 
@@ -1143,6 +1216,26 @@ def build_parser() -> argparse.ArgumentParser:
     p_bench.add_argument("--steps", type=int, default=200, help="每个 seed 跑多少步")
     p_bench.add_argument("--seeds", type=int, default=3, help="用几个 seed（1..N）")
     p_bench.set_defaults(func=cmd_bench)
+
+    p_autonomy = sub.add_parser("autonomy", help="自主级别：locked / supervised / full（一次性给到位）")
+    p_autonomy.add_argument("--level", choices=["locked", "supervised", "full"], default=None)
+    p_autonomy.add_argument("--by", default="human")
+    p_autonomy.add_argument("--days", type=int, default=90, help="full 模式下标准授权的有效天数")
+    p_autonomy.add_argument("--capabilities", default=None, help="逗号分隔，默认 web.fetch,gpu.train,storage.write,repo.private-read")
+    p_autonomy.add_argument("--revoke", action="store_true", help="一键收回全部标准授权")
+    p_autonomy.set_defaults(func=cmd_autonomy)
+
+    p_auto = sub.add_parser("auto", help="无人值守：连续跑，遇预算/冻结/待评审自动停")
+    p_auto.add_argument("--cycles", type=int, default=10)
+    p_auto.add_argument("--rounds", type=int, default=3)
+    p_auto.add_argument("--episodes", type=int, default=40)
+    p_auto.add_argument("--steps", type=int, default=60)
+    p_auto.add_argument("--eval-count", type=int, default=20)
+    p_auto.add_argument("--hazards", type=int, default=4)
+    p_auto.add_argument("--interval", type=int, default=0, help="每轮间隔秒数，0=不停")
+    p_auto.add_argument("--lethal", action="store_true")
+    p_auto.add_argument("--armor", action="store_true")
+    p_auto.set_defaults(func=cmd_auto)
 
     p_db = sub.add_parser("db", help="持久层：sync / stats / backup")
     p_db.add_argument("action", nargs="?", default="stats", choices=["stats", "sync", "backup"])
