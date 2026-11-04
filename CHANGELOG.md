@@ -5,6 +5,17 @@
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-11-04
+
+收尾补漏：文档索引、Issue 模板、三个失效链接。
+
+- 新增 `docs/INDEX.md`（40+ 份文档的唯一入口）
+- 新增 `.github/ISSUE_TEMPLATE/bug_report.md`（要求贴 doctor 输出）
+- 修 3 处失效链接：EXPERIMENTS-SUMMARY 的英文版引用、i18n 的两处相对路径
+- README 顶部加索引入口
+
+
+
 ## [1.0.0] - 2026-11-04
 
 收官：重写主叙事，把起源与局限写进第一屏。

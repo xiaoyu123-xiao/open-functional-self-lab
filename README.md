@@ -1,6 +1,6 @@
 # Open Functional Self Lab
 
-> [中文](README.md) | [English](README.en.md)
+> [中文](README.md) | [English](README.en.md) | [**文档索引**](docs/INDEX.md) | [起源与现状](docs/ORIGIN.md)
 
 **这个仓库是什么**：一份**零依赖的可复现实验模板** + 一份**诚实的失败档案** + 一条**被验证过的小结论**。
 
