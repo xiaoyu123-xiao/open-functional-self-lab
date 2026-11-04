@@ -78,6 +78,7 @@ WORLDS: Dict[str, Dict[str, Any]] = {
     "lethal": {"lethal": True},
     "one_hit": {"one_hit": True},
     "slippery": {"slippery": 0.3},
+    "drift": {"hazard_drift": 10},
 }
 
 
