@@ -53,34 +53,32 @@ foreach ($name in @('HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'http_proxy', 'htt
 $env:GIT_TERMINAL_PROMPT = '0'
 
 Info "== 3/4 选择网络路径 =="
-$proxyArgs = @('-c', 'http.proxy=', '-c', 'https.proxy=')
-$reachable = $false
-
-git @proxyArgs ls-remote --exit-code $remote > $null 2>&1
-if ($LASTEXITCODE -eq 0 -or $LASTEXITCODE -eq 2) {
-    $reachable = $true
-    Write-Host "直连可用（空仓库返回 2 属正常）"
+# 顺序：先试系统代理（大多数人靠它上网），不通再试直连。两种都用同一段只读探测，
+# 不写任何配置、不改系统设置。
+$settings = Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings' -ErrorAction SilentlyContinue
+$candidates = @()
+if ($settings -and $settings.ProxyEnable -eq 1 -and $settings.ProxyServer) {
+    $candidates += @{ Name = "系统代理 $($settings.ProxyServer)"; Args = @('-c', "http.proxy=http://$($settings.ProxyServer)", '-c', "https.proxy=http://$($settings.ProxyServer)") }
 }
-else {
-    $settings = Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings' -Name ProxyServer -ErrorAction SilentlyContinue
-    if ($settings -and $settings.ProxyServer) {
-        $candidate = "http://$($settings.ProxyServer)"
-        Warn "直连失败，改用系统代理 $candidate 再试一次"
-        $proxyArgs = @('-c', "http.proxy=$candidate", '-c', "https.proxy=$candidate")
-        git @proxyArgs ls-remote --exit-code $remote > $null 2>&1
-        if ($LASTEXITCODE -eq 0 -or $LASTEXITCODE -eq 2) {
-            $reachable = $true
-            Write-Host "经代理可用"
-        }
+$candidates += @{ Name = '直连'; Args = @('-c', 'http.proxy=', '-c', 'https.proxy=') }
+
+$proxyArgs = $null
+foreach ($candidate in $candidates) {
+    git @($candidate.Args) ls-remote --exit-code $remote > $null 2>&1
+    if ($LASTEXITCODE -eq 0 -or $LASTEXITCODE -eq 2) {
+        $proxyArgs = $candidate.Args
+        Write-Host "可用路径：$($candidate.Name)（空仓库返回 2 属正常）"
+        break
     }
+    Warn "$($candidate.Name) 连不上，换下一条"
 }
 
-if (-not $reachable) {
-    Fail "连不上 $remote"
+if (-not $proxyArgs) {
+    Fail "所有路径都连不上 $remote"
     Write-Host "排查顺序："
     Write-Host "  1. 仓库地址是否正确、网页上是否已建好（空仓库也算建好）"
-    Write-Host "  2. 浏览器能打开 https://github.com 吗？打不开是网络问题"
-    Write-Host "  3. 在用代理软件？确认它正在运行；或关掉系统代理后重试"
+    Write-Host "  2. 浏览器能打开 https://github.com 吗？打不开是网络/代理问题"
+    Write-Host "  3. 设置 → 网络和 Internet → 代理，确认代理软件在运行、端口正确"
     exit 1
 }
 
