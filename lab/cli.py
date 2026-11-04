@@ -33,6 +33,7 @@ from .collab import analyse as analyse_behaviour
 from .core import evaluate_policy, load_object, run_generic_episode
 from .lessons import ExperimentReport, check_experiment, summary as lessons_summary
 from .benchmark import format_report as format_reference, run_reference
+from .facts import check_citations, format_facts
 from .collab import build_proposals, emergent_gap, record_choice
 from .knowledge import KnowledgeBase
 from .perm import Permissions
@@ -641,6 +642,23 @@ def cmd_ref(args: argparse.Namespace, ctx: Context) -> int:
          "ate": result["ate"], "hurt": result["hurt"], "explore": bool(args.explore)},
         ctx.clock.now_iso(),
     )
+    return EXIT_OK
+
+
+# ---------------------------------------------------------------- facts
+
+
+def cmd_facts(args: argparse.Namespace, ctx: Context) -> int:
+    if args.check:
+        problems = check_citations(args.check)
+        if problems:
+            _emit(f"引用检查未通过（{len(problems)} 条）：")
+            for item in problems:
+                _emit(f"  - {item}")
+            return EXIT_FAIL
+        _emit(f"引用检查通过：{len(args.check)} 条事实均已核实。")
+        return EXIT_OK
+    _emit(format_facts(only_brief=args.brief))
     return EXIT_OK
 
 
@@ -1398,6 +1416,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_ref.add_argument("--repeats", type=int, default=12)
     p_ref.add_argument("--explore", action="store_true", help="探路模式（结果不得当结论）")
     p_ref.set_defaults(func=cmd_ref)
+
+    p_facts = sub.add_parser("facts", help="已知事实库：下结论前必须引用")
+    p_facts.add_argument("--brief", action="store_true", help="只看关键几条（上下文丢了先跑这个）")
+    p_facts.add_argument("--check", nargs="*", default=None, metavar="FID", help="检查引用的事实是否存在")
+    p_facts.set_defaults(func=cmd_facts)
 
     p_lessons = sub.add_parser("lessons", help="教训库：列出/校验一次实验的凭据")
     p_lessons.add_argument("--check", action="store_true", help="按教训检查这份结果")

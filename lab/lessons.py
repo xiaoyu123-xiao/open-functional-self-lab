@@ -54,6 +54,9 @@ LESSONS: Sequence[Lesson] = (
     Lesson("L08", "没有收益的改动必须回退，并在代码里留注释指向实验记录",
            "v0.26 把塑形换成 BFS 距离后更差，已回退",
            "doc:docs/experiments/0014-three-attempts.md", "v0.26"),
+    Lesson("L11", "任何结论必须引用已核实的事实编号（F1..F10）",
+           "反复忘记'BFS 已在 ref-1 吃满 30/30'，连续几轮追一个追不到的目标",
+           "test:test_claim_must_cite_facts", "v0.44"),
     Lesson("L10", "12 组的显著不足以定稿：必须在 ≥20 组上复现且区间仍不含 0",
            "v0.41 的探索奖励 +5.75（11/12）在 20 组时缩到 +3.20 且区间含 0",
            "test:test_small_sample_significance_is_not_enough", "v0.42"),
@@ -87,6 +90,7 @@ class ExperimentReport:
     feature_stats: Optional[Dict[str, float]] = None
     literature_refs: List[str] = field(default_factory=list)
     claims_significant: bool = False
+    cited_facts: List[str] = field(default_factory=list)
 
 
 def check_experiment(report: ExperimentReport) -> List[str]:
@@ -116,6 +120,14 @@ def check_experiment(report: ExperimentReport) -> List[str]:
 
     if report.literature_refs and report.repeats < 10:
         violations.append("L07 引用了文献但样本不足，不能声称复现")
+
+    if report.repeats >= 10:
+        if not report.cited_facts:
+            violations.append("L11 结论必须引用已核实事实（lab facts --brief 看有哪些）")
+        else:
+            from .facts import check_citations
+
+            violations.extend(f"L11 {item}" for item in check_citations(report.cited_facts))
 
     if report.diff_ci is not None and report.diff_ci[0] < 0 < report.diff_ci[1]:
         violations.append("L01 置信区间包含 0：只能说'未观察到差异'，不能说'有效'")

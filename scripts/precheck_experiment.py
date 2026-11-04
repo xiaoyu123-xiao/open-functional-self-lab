@@ -46,6 +46,7 @@ def main(argv: "list[str] | None" = None) -> int:
     parser.add_argument("--reward-changed", action="store_true")
     parser.add_argument("--same-reward-baseline", action="store_true")
     parser.add_argument("--idle-control", action="store_true")
+    parser.add_argument("--facts", nargs="*", default=None, metavar="FID", help="引用的已核实事实编号")
     args = parser.parse_args(argv)
 
     problems = missing_enforcements()
@@ -67,6 +68,7 @@ def main(argv: "list[str] | None" = None) -> int:
         same_reward_baseline=args.same_reward_baseline,
         reward_changed=args.reward_changed,
         idle_control=args.idle_control,
+        cited_facts=list(args.facts or []),
     )
     violations = check_experiment(report)
     if violations:

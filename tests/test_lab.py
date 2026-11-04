@@ -553,6 +553,43 @@ class WeightedHeadTests(unittest.TestCase):
         self.assertEqual(len(summary["multi"]["runs"][0]["rows"]), len(HELDOUT_CONFIGS))
 
 
+class FactMemoryTests(unittest.TestCase):
+    """v0.44：事实层——结论必须引用已核实事实。"""
+
+    def test_facts_have_evidence(self) -> None:
+        from lab.facts import FACTS
+
+        self.assertGreaterEqual(len(FACTS), 10)
+        for fact in FACTS:
+            self.assertTrue(fact.evidence, fact.fact_id)
+            self.assertTrue(fact.verified, fact.fact_id)
+
+    def test_claim_must_cite_facts(self) -> None:
+        from lab.lessons import ExperimentReport, check_experiment
+
+        report = ExperimentReport(name="no-facts", repeats=12, primary_metric="ate",
+                                  diff_ci=(0.5, 3.0), same_reward_baseline=True, idle_control=True)
+        problems = check_experiment(report)
+        self.assertTrue(any("L11" in item for item in problems))
+
+    def test_unknown_fact_is_rejected(self) -> None:
+        from lab.lessons import ExperimentReport, check_experiment
+
+        report = ExperimentReport(name="bad-fact", repeats=12, primary_metric="ate",
+                                  diff_ci=(0.5, 3.0), same_reward_baseline=True, idle_control=True,
+                                  cited_facts=["F999"])
+        problems = check_experiment(report)
+        self.assertTrue(any("F999" in item for item in problems))
+
+    def test_valid_citation_passes(self) -> None:
+        from lab.lessons import ExperimentReport, check_experiment
+
+        report = ExperimentReport(name="good", repeats=12, primary_metric="ate",
+                                  diff_ci=(0.5, 3.0), same_reward_baseline=True, idle_control=True,
+                                  cited_facts=["F2", "F10"])
+        self.assertEqual(check_experiment(report), [])
+
+
 class L10Tests(unittest.TestCase):
     """v0.42：12 组显著不能定稿（探索奖励在 20 组时失效）。"""
 
@@ -570,7 +607,8 @@ class L10Tests(unittest.TestCase):
 
         report = ExperimentReport(name="twenty", repeats=20, primary_metric="ate",
                                   diff_ci=(0.5, 4.0), claims_significant=True,
-                                  same_reward_baseline=True, idle_control=True)
+                                  same_reward_baseline=True, idle_control=True,
+                                  cited_facts=["F2"])
         self.assertEqual(check_experiment(report), [])
 
 
@@ -668,7 +706,7 @@ class LessonRegistryTests(unittest.TestCase):
 
         report = ExperimentReport(name="good", repeats=12, primary_metric="ate",
                                   reward_changed=True, same_reward_baseline=True,
-                                  idle_control=True, diff_ci=(0.2, 0.9))
+                                  idle_control=True, diff_ci=(0.2, 0.9), cited_facts=["F2"])
         self.assertEqual(check_experiment(report), [])
 
 

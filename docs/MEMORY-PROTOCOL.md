@@ -26,7 +26,17 @@
 | ③ 强制检查 | `lab lessons --check` / `scripts/precheck_experiment.py` |
 | ④ 每次必跑 | `scripts/preflight.py`（发布前 9 项里含它） |
 
-## 二、九条教训（摘要）
+## 二·零、记忆有两层（v0.44 补上第二层）
+
+| 层 | 内容 | 在哪 | 谁会用 |
+|---|---|---|---|
+| **规则** | 什么不许做（10 条教训） | `lab/lessons.py` | 下结论前的闸门 |
+| **事实** | 已经测出什么（10 条事实 F1..F10） | `lab/facts.py` / `lab facts --brief` | 定方向前必读 |
+
+只做规则会怎样：我反复忘记"BFS 已在 ref-1 吃满 30/30"，连追几轮一个追不到的目标。
+所以 **L11** 规定：任何结论必须引用已核实的事实编号，否则 `check_experiment` 直接拒绝。
+
+## 二、十条教训（摘要）
 
 | 编号 | 规则 | 为什么 |
 |---|---|---|
@@ -69,6 +79,7 @@
 如果你（或未来的我）打开这个仓库时什么都不记得，按这个顺序读：
 
 1. `docs/MEMORY-PROTOCOL.md`（本文）——先知道规矩
+1.5 `python -m lab.cli facts --brief`——**先知道世界是什么样**（4 条关键事实）
 2. `lab/lessons.py` 的 `LESSONS`——知道犯过什么错
 3. `docs/EXPERIMENTS-SUMMARY.md`——知道哪些结论还站得住
 4. `docs/AGENT-SELF-USE.md`——知道 AI 自己该怎么用这套东西
