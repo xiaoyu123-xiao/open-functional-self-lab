@@ -6,9 +6,38 @@
 ## [Unreleased]
 
 ### 计划
+- v0.2 第二块：`lab loop`（自驱循环，每轮过预算闸门，到 REVIEWING 就停）
+- v0.2 第三块：插件接口 `lab/plugins/*.py`（manifest 声明能力与预算，加载时过红线扫描）
+
+
+### 计划
 - Issue 0014：decay / TTL / 调度器（含 DST 规则）
 - Issue 0008：实验闭环（更复杂的任务，才看得出预测器的真实差距）
 - Issue 0013 / 0016：真实 checkpoint 恢复、并发锁
+
+## [0.2.0] - 2026-11-04
+
+v0.2 的第一块：**自我模型**。也是"能不能不重复别人"这个问题的落点（`docs/positioning.md`）。
+
+### Added
+- `lab/selfmodel.py`：结构化自我描述，五段——`identity`（身份+边界，运行时不可改写）、
+  `capabilities`（能力自评，数字必须能从账本复算）、`failure_patterns`（同一错误重复才算模式）、
+  `goals`（可被人工干预的目标栈）、`continuity`（会话连续次数）
+- `lab self`：查看 / `self init --name --purpose` / `self goal-add --text` / `self goal-done --id`
+- `lab run` 结束自动更新自我模型（会话数、上一轮步数与平均误差）
+- `lab review --pass|--fail` 把评审结果回写：通过 → 成功率 +1；不通过 → `review_failed` 失败模式 +1
+- `docs/positioning.md`：与 LangGraph / CrewAI / AutoGen / AutoGPT 的差异说明，
+  并引用业内公认的五条失败模式，说明我们冲的是"持久状态、每步预算、eval harness"这三条
+- `docs/metrics.md` 第 7 节：自我指涉的 5 个可测代理指标（不宣称意识，但不关门）
+- 6 个新测试：初始化、未初始化时拒绝记录、评审回写成功率、失败模式、目标生命周期、CLI 端到端
+
+### Changed
+- 测试数 57 → 63
+- 版本进入 `0.2.x`：从"控制面"转向"自驱循环"（下一块是 `lab loop`，再下一块是插件接口）
+
+### Notes
+- 关于"主观意识"：本项目**不宣称**，也**不判死**。做法是把它拆成可积累的中间指标，
+  并且明确写清"指标上升 ≠ 意识出现"。
 
 ## [0.1.4] - 2026-11-04
 

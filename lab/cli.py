@@ -29,6 +29,7 @@ from .clock import Clock, FakeClock, parse_iso, to_iso
 from .ledger import Ledger
 from .notify import DEDUPE_HOURS, LEVELS, Notifier
 from .predict import benchmark as run_benchmark
+from .selfmodel import SelfModel
 from .predict import render_report as render_bench
 from .report import render as render_report
 from .state import STATES, IllegalTransition, StateStore
@@ -91,6 +92,9 @@ class Context:
                 else:
                     merged[key] = value
         return merged
+
+    def self_model(self) -> SelfModel:
+        return SelfModel(self.state_dir / "self.json")
 
     def notifier(self, echo: bool = True) -> Notifier:
         return Notifier(self.ledger, self.clock, self.state_dir, echo=echo)
@@ -399,6 +403,17 @@ def cmd_run(args: argparse.Namespace, ctx: Context) -> int:
             f"损伤 {last_record['damage']} 稳态误差 {last_record['homeostatic_error']} "
             f"预测误差 {last_record['prediction_error']}"
         )
+    model = ctx.self_model()
+    if model.exists():
+        mean_error = round(sum(record.get("prediction_error", 0.0) for record in _episode_records(seed, min(steps, 200))) / max(1, min(steps, 200)), 6)
+        model.touch_session(ctx.clock.now_iso())
+        model.record_run(
+            ts=ctx.clock.now_iso(),
+            run_id=run_id,
+            steps=executed,
+            mean_error=mean_error,
+            accepted=False,          # 评审通过后才改成 True
+        )
     _emit(f"新增账本事件 {len(ctx.ledger.read()) - ledger_before} 条")
     _emit("等待评审：python -m lab.cli review --pass   （不通过则 --fail --reason \"原因\"）")
     return EXIT_OK
@@ -559,6 +574,12 @@ def cmd_review(args: argparse.Namespace, ctx: Context) -> int:
             "READY", ts=ctx.clock.now_iso(), actor=f"human:{args.by}", reason=args.reason or "评审通过"
         )
         ctx.ledger.append("transition", record, ctx.clock.now_iso(), actor=f"human:{args.by}")
+        model = ctx.self_model()
+        if model.exists():
+            try:
+                model.mark_review(accepted=True, ts=ctx.clock.now_iso(), reason=args.reason or "评审通过")
+            except ValueError:
+                pass
         _emit(f"评审通过（{args.by}），状态回到 READY，可以再跑一轮。")
         return EXIT_OK
 
@@ -567,11 +588,57 @@ def cmd_review(args: argparse.Namespace, ctx: Context) -> int:
     )
     ctx.ledger.append("transition", record, ctx.clock.now_iso(), actor=f"human:{args.by}")
     ctx.notifier().emit("medium", "review-fail", args.reason or "评审不通过", dedupe_key="review-fail")
+    model = ctx.self_model()
+    if model.exists():
+        try:
+            model.mark_review(accepted=False, ts=ctx.clock.now_iso(), reason=args.reason or "评审不通过")
+        except ValueError:
+            pass
     record = ctx.store.transition(
         "READY", ts=ctx.clock.now_iso(), actor=f"human:{args.by}", reason="回滚完成"
     )
     ctx.ledger.append("transition", record, ctx.clock.now_iso(), actor=f"human:{args.by}")
     _emit("评审不通过：已回滚到 READY，请先看 state/reports/ 再决定下一步。")
+    return EXIT_OK
+
+
+# ---------------------------------------------------------------- self
+
+
+def cmd_self(args: argparse.Namespace, ctx: Context) -> int:
+    model = ctx.self_model()
+
+    if args.action == "init":
+        if not args.name or not args.purpose:
+            _emit("init 需要 --name 和 --purpose（身份锚点，运行时不可改写）")
+            return EXIT_USAGE
+        data = model.init(args.name, args.purpose, ctx.clock.now_iso())
+        _emit(f"自我模型已建立：{model.path.relative_to(ctx.root).as_posix()}")
+        _emit(f"边界 {len(data['identity']['boundaries'])} 条已写入，运行时不可改写。")
+        return EXIT_OK
+
+    if args.action == "goal-add":
+        if not args.text:
+            _emit("goal-add 需要 --text")
+            return EXIT_USAGE
+        if not model.exists():
+            _emit("先跑 python -m lab.cli self init --name ... --purpose ...")
+            return EXIT_FAIL
+        goal_id = model.add_goal(args.text, ctx.clock.now_iso())
+        _emit(f"已加目标 #{goal_id}：{args.text}")
+        return EXIT_OK
+
+    if args.action == "goal-done":
+        if args.id is None:
+            _emit("goal-done 需要 --id")
+            return EXIT_USAGE
+        if not model.exists() or not model.activate_goal(args.id):
+            _emit(f"没有编号为 {args.id} 的目标")
+            return EXIT_FAIL
+        _emit(f"目标 #{args.id} 已完成")
+        return EXIT_OK
+
+    _emit(model.summary())
     return EXIT_OK
 
 
@@ -704,6 +771,14 @@ def build_parser() -> argparse.ArgumentParser:
     p_bench.add_argument("--steps", type=int, default=200, help="每个 seed 跑多少步")
     p_bench.add_argument("--seeds", type=int, default=3, help="用几个 seed（1..N）")
     p_bench.set_defaults(func=cmd_bench)
+
+    p_self = sub.add_parser("self", help="自我模型：身份 / 能力自评 / 失败模式 / 目标")
+    p_self.add_argument("action", nargs="?", default="show", choices=["show", "init", "goal-add", "goal-done"])
+    p_self.add_argument("--name", default=None)
+    p_self.add_argument("--purpose", default=None)
+    p_self.add_argument("--text", default=None)
+    p_self.add_argument("--id", type=int, default=None)
+    p_self.set_defaults(func=cmd_self)
 
     p_review = sub.add_parser("review", help="独立评审上一轮（通过 / 不通过）")
     p_review.add_argument("--pass", dest="passed", action="store_true", help="评审通过，回到 READY")

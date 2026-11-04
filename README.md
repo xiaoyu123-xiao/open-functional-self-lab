@@ -16,6 +16,7 @@ python -m lab.cli doctor          # 10 项自检
 python -m lab.cli init
 python -m lab.cli run --steps 20  # 跑一轮受控循环（结束停在 REVIEWING）
 python -m lab.cli review --pass    # 评审通过才回到 READY
+python -m lab.cli self             # 看它对自己的描述（能力/失败模式/目标）
 python -m lab.cli verify          # 校验账本/状态机/checkpoint/预算
 python -m lab.cli lint            # 红线扫描
 python -m lab.cli bench --steps 200  # 预测基线对比（random/persistence/linear）
@@ -46,9 +47,10 @@ Windows / macOS / Linux 命令相同。想完全复现某次运行：加 `--fake
 | 仪表盘 / 周报自动生成 | `lab/viz.py` · `lab/report.py` |
 | 预测基线对比（random / persistence / linear） | `lab/predict.py` · `lab bench` |
 | 通知：分级 / 24h 去重 / `ack` 回应 / 回应率 | `lab/notify.py` · `lab notify` · `lab inbox` |
+| **自我模型**：身份锚点 / 能力自评 / 失败模式 / 目标 | `lab/selfmodel.py` · `lab self` |
 | 紧急冻结开关 | `lab freeze` / `lab unfreeze --by <你>` |
 
-**已验证**：10 项自检全过 · 57 个 unittest · CI 覆盖 Python 3.10–3.13 · 干净 clone 复验通过。
+**已验证**：10 项自检全过 · 63 个 unittest · CI 覆盖 Python 3.10–3.13 · 干净 clone 复验通过。
 
 ## 参与
 

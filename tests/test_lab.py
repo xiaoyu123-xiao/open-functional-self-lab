@@ -24,6 +24,7 @@ from lab.cli import main as cli_main  # noqa: E402
 from lab.clock import Clock, FakeClock, elapsed_seconds, parse_iso, to_iso  # noqa: E402
 from lab.env import GridWorld, greedy_action  # noqa: E402
 from lab.notify import Notifier  # noqa: E402
+from lab.selfmodel import SelfModel  # noqa: E402
 from lab.predict import Linear, Persistence, benchmark, error, sparkline  # noqa: E402
 from lab.ledger import Ledger  # noqa: E402
 from lab.policy import scan, scan_text, summarize  # noqa: E402
@@ -349,6 +350,63 @@ class PredictTests(unittest.TestCase):
         self.assertEqual(len(sparkline([0.1, 0.2, 0.3])), 3)
         self.assertEqual(len(sparkline(list(range(200)), width=20)), 20)
         self.assertEqual(sparkline([]), "")
+
+
+class SelfModelTests(unittest.TestCase):
+    """v0.2 第一块：自我模型（身份 / 能力自评 / 失败模式 / 目标 / 连续性）。"""
+
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.path = Path(self.tmp.name) / "state" / "self.json"
+        self.model = SelfModel(self.path)
+        self.ts = "2026-01-01T00:00:00Z"
+
+    def tearDown(self) -> None:
+        self.tmp.cleanup()
+
+    def test_init_writes_identity_and_boundaries(self) -> None:
+        data = self.model.init("lab", "观察自己", self.ts)
+        self.assertEqual(data["identity"]["name"], "lab")
+        self.assertGreaterEqual(len(data["identity"]["boundaries"]), 5)
+        self.assertTrue(self.path.exists())
+
+    def test_record_run_requires_init(self) -> None:
+        with self.assertRaises(FileNotFoundError):
+            self.model.record_run(ts=self.ts, run_id="run-001", steps=10, mean_error=0.2, accepted=False)
+
+    def test_record_and_review_pass_raises_success_rate(self) -> None:
+        self.model.init("lab", "观察自己", self.ts)
+        self.model.record_run(ts=self.ts, run_id="run-001", steps=10, mean_error=0.25, accepted=False)
+        self.assertEqual(self.model.success_rate(), 0.0)
+        self.model.mark_review(accepted=True, ts=self.ts, reason="ok")
+        self.assertEqual(self.model.success_rate(), 1.0)
+        self.assertEqual(self.model.load()["last_run"]["accepted"], True)
+
+    def test_review_fail_records_failure_pattern(self) -> None:
+        self.model.init("lab", "观察自己", self.ts)
+        self.model.record_run(ts=self.ts, run_id="run-001", steps=10, mean_error=0.9, accepted=False)
+        data = self.model.mark_review(accepted=False, ts=self.ts, reason="误差异常")
+        self.assertEqual(data["failure_patterns"]["review_failed"]["count"], 1)
+
+    def test_goals_lifecycle(self) -> None:
+        self.model.init("lab", "观察自己", self.ts)
+        first = self.model.add_goal("跑通 loop", self.ts)
+        second = self.model.add_goal("加插件接口", self.ts)
+        self.assertEqual((first, second), (1, 2))
+        self.assertEqual(len(self.model.active_goals()), 2)
+        self.assertTrue(self.model.activate_goal(first))
+        self.assertEqual(len(self.model.active_goals()), 1)
+        self.assertFalse(self.model.activate_goal(999))
+
+    def test_cli_self_commands(self) -> None:
+        root = Path(self.tmp.name)
+        args = ["--root", str(root), "--fake-now", self.ts]
+        self.assertEqual(cli_main([*args, "self"]), 0)                      # 未初始化也能看提示
+        self.assertEqual(cli_main([*args, "self", "init"]), 2)              # 缺参数
+        self.assertEqual(cli_main([*args, "self", "init", "--name", "lab", "--purpose", "观察自己"]), 0)
+        self.assertEqual(cli_main([*args, "self", "goal-add", "--text", "跑通 loop"]), 0)
+        self.assertEqual(cli_main([*args, "self", "goal-done", "--id", "1"]), 0)
+        self.assertEqual(cli_main([*args, "self", "goal-done", "--id", "9"]), 1)
 
 
 class LogicAuditTests(unittest.TestCase):

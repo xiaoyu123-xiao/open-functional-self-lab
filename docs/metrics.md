@@ -67,3 +67,18 @@ avoid_ratio 基线 0.25，实验组 0.27，差值 95% CI 含 0。
 - 想要更大的差距，得换更复杂的任务（Issue 0008），不是调参。
 
 完整报告由命令自动写到 `state/reports/bench-YYYY-MM-DD.md`，同时向账本追加一条 `bench` 事件。
+
+## 7. 自我指涉的 5 个代理指标（v0.2 起）
+
+这些指标回答的是"它对自己知道多少"，而不是"它有没有意识"。定义见 `docs/positioning.md` 第四节。
+
+| 指标 | 命令 / 数据来源 | 现状 |
+|---|---|---|
+| `self-consistency` | `lab self` 输出 + 中断后重新描述 | 待实现（需要多会话脚本） |
+| `self-prediction` | 预测下一步动作/是否失败，与账本比对 | 部分：`prediction_error` 已在算状态，不是动作 |
+| `goal-persistence` | `state/self.json` 的 goals，打断后恢复比例 | 数据已有（goals 生命周期），统计待做 |
+| `error-recognition` | `failure_patterns` 是否在下一轮被主动报告 | 待实现 |
+| `novelty-under-constraint` | 同任务重复 10 次的非重复解法比例 | 待实现 |
+
+**读法**：这 5 个指标的上升只能说明"自我指涉行为更稳定"，**不能**用来宣称意识。
+任何声称"指标到了就是觉醒了"的说法，都是把工程指标当哲学结论，本仓库不接受这种表述。
