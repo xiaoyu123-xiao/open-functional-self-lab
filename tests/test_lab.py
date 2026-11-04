@@ -553,6 +553,31 @@ class WeightedHeadTests(unittest.TestCase):
         self.assertEqual(len(summary["multi"]["runs"][0]["rows"]), len(HELDOUT_CONFIGS))
 
 
+class HurtPenaltyTests(unittest.TestCase):
+    """v0.34：受伤惩罚可调（默认仍是 -1，不改变旧结论）。"""
+
+    def test_default_penalty_unchanged(self) -> None:
+        from lab.agent import _distance_to_food, reward_of
+
+        env = GridWorld(1, hazards=0)
+        previous = _distance_to_food(env)
+        default = reward_of(previous, env, {"ate": False, "hurt": True})
+        self.assertAlmostEqual(default, -1.01, places=2)
+
+    def test_heavy_penalty_is_more_negative(self) -> None:
+        from lab.agent import _distance_to_food, reward_of
+
+        env = GridWorld(1, hazards=0)
+        previous = _distance_to_food(env)
+        heavy = reward_of(previous, env, {"ate": False, "hurt": True}, hurt_penalty=-3.0)
+        self.assertAlmostEqual(heavy, -3.01, places=2)
+
+    def test_penalty_flows_through_training(self) -> None:
+        agent = QLearningAgent(seed=0)
+        stats = train(agent, train_seeds(4), 20, epsilon=0.3, hazards=6, hurt_penalty=-3.0)
+        self.assertEqual(stats["episodes"], 4)
+
+
 class HazardDriftTests(unittest.TestCase):
     """v0.31：危险区会移动（分布漂移）。"""
 

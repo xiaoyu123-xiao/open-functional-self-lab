@@ -29,6 +29,8 @@ GAMMA = 0.95         # 折扣
 EPSILON_START = 0.35
 EPSILON_END = 0.05
 SHAPING = 0.10       # 靠近食物给一点奖励，让稀疏奖励能学起来
+HURT_PENALTY = -1.0   # 受伤惩罚（v0.34 起可调）
+DEATH_PENALTY = -5.0  # 死亡惩罚
 
 TRAIN_SEED_RANGE = (1000, 1999)
 EVAL_SEED_RANGE = (9000, 9999)   # 与训练段**永不重叠**
@@ -261,13 +263,18 @@ class QLearningAgent:
         return self
 
 
-def reward_of(previous_distance: int, env: GridWorld, outcome: Dict[str, Any]) -> float:
-    """奖励设计：吃到 +1、受伤 -1、每步小惩罚、靠近食物给 shaping。"""
+def reward_of(
+    previous_distance: int,
+    env: GridWorld,
+    outcome: Dict[str, Any],
+    hurt_penalty: float = HURT_PENALTY,
+) -> float:
+    """奖励设计：吃到 +1、受伤 hurt_penalty（默认 -1）、每步小惩罚、靠近食物给 shaping。"""
     reward = -0.01
     if outcome.get("ate"):
         reward += 1.0
     if outcome.get("hurt"):
-        reward -= 1.0
+        reward += hurt_penalty
     current = _distance_to_food(env)
     reward += SHAPING * (previous_distance - current)
     return reward

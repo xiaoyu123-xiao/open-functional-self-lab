@@ -61,7 +61,9 @@ def run_episode(
     size: int = 8,
     layout: str = "random",
     with_path: bool = False,
-    slippery: float = 0.0, hazard_drift: int = 0,
+    slippery: float = 0.0,
+    hazard_drift: int = 0,
+    hurt_penalty: float = -1.0,
 ) -> Dict[str, Any]:
     environment = GridWorld(seed, hazards=hazards, lethal=lethal, armor=armor, size=size, layout=layout, slippery=slippery, hazard_drift=hazard_drift)
     state = state_of(environment, with_walls=with_walls, with_path=with_path)
@@ -72,7 +74,7 @@ def run_episode(
         previous_distance = _distance_to_food(environment)
         outcome = environment.step(action)
         following = state_of(environment, with_walls=with_walls, with_path=with_path)
-        reward = reward_of(previous_distance, environment, outcome)
+        reward = reward_of(previous_distance, environment, outcome, hurt_penalty=hurt_penalty)
         total_reward += reward
         ate += 1 if outcome.get("ate") else 0
         hurt += 1 if outcome.get("hurt") else 0
@@ -108,9 +110,11 @@ def train(
     size: int = 8,
     layout: str = "random",
     with_path: bool = False,
-    slippery: float = 0.0, hazard_drift: int = 0,
+    slippery: float = 0.0,
+    hazard_drift: int = 0,
+    hurt_penalty: float = -1.0,
 ) -> Dict[str, Any]:
-    results = [run_episode(agent, seed, steps, train=True, epsilon=epsilon, hazards=hazards, with_walls=with_walls, lethal=lethal, armor=armor, size=size, layout=layout, with_path=with_path, slippery=slippery, hazard_drift=hazard_drift) for seed in seeds]
+    results = [run_episode(agent, seed, steps, train=True, epsilon=epsilon, hazards=hazards, with_walls=with_walls, lethal=lethal, armor=armor, size=size, layout=layout, with_path=with_path, slippery=slippery, hazard_drift=hazard_drift, hurt_penalty=hurt_penalty) for seed in seeds]
     return {
         "episodes": len(results),
         "mean_return": round(sum(item["return"] for item in results) / len(results), 4),
@@ -119,9 +123,9 @@ def train(
     }
 
 
-def evaluate(agent: QLearningAgent, seeds: Sequence[int], steps: int, hazards: int = 4, with_walls: bool = False, lethal: bool = False, armor: bool = False, size: int = 8, layout: str = "random", with_path: bool = False, slippery: float = 0.0, hazard_drift: int = 0) -> Dict[str, Any]:
+def evaluate(agent: QLearningAgent, seeds: Sequence[int], steps: int, hazards: int = 4, with_walls: bool = False, lethal: bool = False, armor: bool = False, size: int = 8, layout: str = "random", with_path: bool = False, slippery: float = 0.0, hazard_drift: int = 0, hurt_penalty: float = -1.0) -> Dict[str, Any]:
     """固定 seed、固定步数、**不学习**。这是唯一被允许用来宣称"变强了"的分数。"""
-    results = [run_episode(agent, seed, steps, train=False, hazards=hazards, with_walls=with_walls, lethal=lethal, armor=armor, size=size, layout=layout, with_path=with_path, slippery=slippery, hazard_drift=hazard_drift) for seed in seeds]
+    results = [run_episode(agent, seed, steps, train=False, hazards=hazards, with_walls=with_walls, lethal=lethal, armor=armor, size=size, layout=layout, with_path=with_path, slippery=slippery, hazard_drift=hazard_drift, hurt_penalty=hurt_penalty) for seed in seeds]
     return {
         "episodes": len(results),
         "mean_return": round(sum(item["return"] for item in results) / len(results), 4),
@@ -131,7 +135,7 @@ def evaluate(agent: QLearningAgent, seeds: Sequence[int], steps: int, hazards: i
     }
 
 
-def baseline_score(seeds: Sequence[int], steps: int, hazards: int = 4, lethal: bool = False, armor: bool = False, size: int = 8, layout: str = "random", with_path: bool = False, slippery: float = 0.0, hazard_drift: int = 0) -> Dict[str, Any]:
+def baseline_score(seeds: Sequence[int], steps: int, hazards: int = 4, lethal: bool = False, armor: bool = False, size: int = 8, layout: str = "random", with_path: bool = False, slippery: float = 0.0, hazard_drift: int = 0, hurt_penalty: float = -1.0) -> Dict[str, Any]:
     """对照组：BFS 贪心基线（就是 v0.1–v0.3 用的那个）。"""
     total = 0.0
     ate = hurt = 0
@@ -141,7 +145,7 @@ def baseline_score(seeds: Sequence[int], steps: int, hazards: int = 4, lethal: b
         for _ in range(steps):
             previous_distance = _distance_to_food(environment)
             outcome = environment.step(greedy_action(environment))
-            total += reward_of(previous_distance, environment, outcome)
+            total += reward_of(previous_distance, environment, outcome, hurt_penalty=hurt_penalty)
             ate += 1 if outcome.get("ate") else 0
             hurt += 1 if outcome.get("hurt") else 0
             if environment.dead:

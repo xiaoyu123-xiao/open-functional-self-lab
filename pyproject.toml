@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "open-functional-self-lab"
-version = "0.33.0"
+version = "0.34.0"
 description = "A controlled, testable lab for functional self-models and open-ended research loops. Not a claim of consciousness."
 readme = "README.md"
 requires-python = ">=3.10"
