@@ -268,9 +268,10 @@ def reward_of(
     env: GridWorld,
     outcome: Dict[str, Any],
     hurt_penalty: float = HURT_PENALTY,
+    survival_bonus: float = 0.0,
 ) -> float:
     """奖励设计：吃到 +1、受伤 hurt_penalty（默认 -1）、每步小惩罚、靠近食物给 shaping。"""
-    reward = -0.01
+    reward = -0.01 + survival_bonus
     if outcome.get("ate"):
         reward += 1.0
     if outcome.get("hurt"):

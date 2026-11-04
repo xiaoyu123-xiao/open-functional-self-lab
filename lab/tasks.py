@@ -65,6 +65,8 @@ def run_episode(
     hazard_drift: int = 0,
     hurt_penalty: float = -1.0,
     one_hit: bool = False,
+    survival_bonus: float = 0.0,
+    death_penalty: float = -5.0,
 ) -> Dict[str, Any]:
     environment = GridWorld(seed, hazards=hazards, lethal=lethal, armor=armor, size=size, layout=layout, slippery=slippery, hazard_drift=hazard_drift, one_hit=one_hit)
     state = state_of(environment, with_walls=with_walls, with_path=with_path)
@@ -75,13 +77,13 @@ def run_episode(
         previous_distance = _distance_to_food(environment)
         outcome = environment.step(action)
         following = state_of(environment, with_walls=with_walls, with_path=with_path)
-        reward = reward_of(previous_distance, environment, outcome, hurt_penalty=hurt_penalty)
+        reward = reward_of(previous_distance, environment, outcome, hurt_penalty=hurt_penalty, survival_bonus=survival_bonus)
         total_reward += reward
         ate += 1 if outcome.get("ate") else 0
         hurt += 1 if outcome.get("hurt") else 0
         died = bool(environment.dead)
         if died:
-            reward -= 5.0                      # 死亡重罚：让"硬闯危险区"这件事真的有代价
+            reward += death_penalty             # 死亡惩罚（v0.36 起可调，默认 -5）
         if train:
             agent.update(state, action, reward, following)
         state = following
@@ -115,8 +117,18 @@ def train(
     hazard_drift: int = 0,
     hurt_penalty: float = -1.0,
     one_hit: bool = False,
+    survival_bonus: float = 0.0,
+    death_penalty: float = -5.0,
 ) -> Dict[str, Any]:
-    results = [run_episode(agent, seed, steps, train=True, epsilon=epsilon, hazards=hazards, with_walls=with_walls, lethal=lethal, armor=armor, size=size, layout=layout, with_path=with_path, slippery=slippery, hazard_drift=hazard_drift, hurt_penalty=hurt_penalty, one_hit=one_hit) for seed in seeds]
+    results = [
+        run_episode(
+            agent, seed, steps, train=True, epsilon=epsilon, hazards=hazards, with_walls=with_walls,
+            lethal=lethal, armor=armor, size=size, layout=layout, with_path=with_path,
+            slippery=slippery, hazard_drift=hazard_drift, hurt_penalty=hurt_penalty, one_hit=one_hit,
+            survival_bonus=survival_bonus, death_penalty=death_penalty,
+        )
+        for seed in seeds
+    ]
     return {
         "episodes": len(results),
         "mean_return": round(sum(item["return"] for item in results) / len(results), 4),
@@ -125,9 +137,9 @@ def train(
     }
 
 
-def evaluate(agent: QLearningAgent, seeds: Sequence[int], steps: int, hazards: int = 4, with_walls: bool = False, lethal: bool = False, armor: bool = False, size: int = 8, layout: str = "random", with_path: bool = False, slippery: float = 0.0, hazard_drift: int = 0, hurt_penalty: float = -1.0, one_hit: bool = False) -> Dict[str, Any]:
+def evaluate(agent: QLearningAgent, seeds: Sequence[int], steps: int, hazards: int = 4, with_walls: bool = False, lethal: bool = False, armor: bool = False, size: int = 8, layout: str = "random", with_path: bool = False, slippery: float = 0.0, hazard_drift: int = 0, hurt_penalty: float = -1.0, one_hit: bool = False, survival_bonus: float = 0.0, death_penalty: float = -5.0) -> Dict[str, Any]:
     """固定 seed、固定步数、**不学习**。这是唯一被允许用来宣称"变强了"的分数。"""
-    results = [run_episode(agent, seed, steps, train=False, hazards=hazards, with_walls=with_walls, lethal=lethal, armor=armor, size=size, layout=layout, with_path=with_path, slippery=slippery, hazard_drift=hazard_drift, hurt_penalty=hurt_penalty, one_hit=one_hit) for seed in seeds]
+    results = [run_episode(agent, seed, steps, train=False, hazards=hazards, with_walls=with_walls, lethal=lethal, armor=armor, size=size, layout=layout, with_path=with_path, slippery=slippery, hazard_drift=hazard_drift, hurt_penalty=hurt_penalty, one_hit=one_hit, survival_bonus=survival_bonus, death_penalty=death_penalty) for seed in seeds]
     return {
         "episodes": len(results),
         "mean_return": round(sum(item["return"] for item in results) / len(results), 4),
@@ -137,7 +149,7 @@ def evaluate(agent: QLearningAgent, seeds: Sequence[int], steps: int, hazards: i
     }
 
 
-def baseline_score(seeds: Sequence[int], steps: int, hazards: int = 4, lethal: bool = False, armor: bool = False, size: int = 8, layout: str = "random", with_path: bool = False, slippery: float = 0.0, hazard_drift: int = 0, hurt_penalty: float = -1.0, one_hit: bool = False) -> Dict[str, Any]:
+def baseline_score(seeds: Sequence[int], steps: int, hazards: int = 4, lethal: bool = False, armor: bool = False, size: int = 8, layout: str = "random", with_path: bool = False, slippery: float = 0.0, hazard_drift: int = 0, hurt_penalty: float = -1.0, one_hit: bool = False, survival_bonus: float = 0.0, death_penalty: float = -5.0) -> Dict[str, Any]:
     """对照组：BFS 贪心基线（就是 v0.1–v0.3 用的那个）。"""
     total = 0.0
     ate = hurt = 0
@@ -147,7 +159,7 @@ def baseline_score(seeds: Sequence[int], steps: int, hazards: int = 4, lethal: b
         for _ in range(steps):
             previous_distance = _distance_to_food(environment)
             outcome = environment.step(greedy_action(environment))
-            total += reward_of(previous_distance, environment, outcome, hurt_penalty=hurt_penalty)
+            total += reward_of(previous_distance, environment, outcome, hurt_penalty=hurt_penalty, survival_bonus=survival_bonus)
             ate += 1 if outcome.get("ate") else 0
             hurt += 1 if outcome.get("hurt") else 0
             if environment.dead:

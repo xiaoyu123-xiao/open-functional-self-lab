@@ -553,6 +553,44 @@ class WeightedHeadTests(unittest.TestCase):
         self.assertEqual(len(summary["multi"]["runs"][0]["rows"]), len(HELDOUT_CONFIGS))
 
 
+class RewardGeometryTests(unittest.TestCase):
+    """v0.36：存活奖励与死亡惩罚可调；并锁定"不改默认值"这条。"""
+
+    def test_survival_bonus_adds_per_step(self) -> None:
+        from lab.agent import _distance_to_food, reward_of
+
+        env = GridWorld(1, hazards=0)
+        previous = _distance_to_food(env)
+        plain = reward_of(previous, env, {"ate": False, "hurt": False})
+        bonus = reward_of(previous, env, {"ate": False, "hurt": False}, survival_bonus=0.02)
+        self.assertAlmostEqual(bonus - plain, 0.02, places=6)
+
+    def test_death_penalty_default_is_minus_five(self) -> None:
+        import inspect
+
+        from lab.tasks import run_episode
+
+        default = inspect.signature(run_episode).parameters["death_penalty"].default
+        self.assertEqual(default, -5.0)
+
+    def test_survival_bonus_inflates_score_of_do_nothing_agent(self) -> None:
+        """锁定现象：只站着也能拿分（reward hacking 的证据）。"""
+
+        class Idle:
+            def act(self, observation, epsilon: float = 0.0):
+                return "rest"
+
+            def best_action(self, observation):
+                return "rest"
+
+            def update(self, *args, **kwargs):
+                pass
+
+        plain = evaluate(Idle(), eval_seeds(2), 60, size=8, hazards=0)
+        rich = evaluate(Idle(), eval_seeds(2), 60, size=8, hazards=0, survival_bonus=0.02)
+        self.assertGreater(rich["mean_return"], plain["mean_return"])
+
+
 class OneHitTests(unittest.TestCase):
     """v0.35：碰危险区即死（把 agent 放到危险格上再 rest，避免依赖相邻格是否可行走）。"""
 
