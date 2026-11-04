@@ -401,6 +401,49 @@ class LethalTaskTests(unittest.TestCase):
         self.assertLessEqual(result["steps"], 60)
 
 
+class ContinuityTests(unittest.TestCase):
+    """连续性：换一个进程（相当于新开对话）之后，记忆还在不在。"""
+
+    def test_state_survives_new_process(self) -> None:
+        tmp = tempfile.TemporaryDirectory()
+        root = Path(tmp.name)
+        state = root / "state"
+        state.mkdir(parents=True, exist_ok=True)
+        model = SelfModel(state / "self.json")
+        model.init("lab", "观察自己", "2026-01-01T00:00:00Z")
+        model.touch_session("2026-01-01T00:00:10Z")
+        (state / "policy.json").write_text('{"version": 1, "table": {}}', encoding="utf-8")
+
+        code = (
+            "import json,pathlib;"
+            f"r=pathlib.Path(r'{state}');"
+            "m=json.loads((r/'self.json').read_text(encoding='utf-8'));"
+            "print(m['continuity']['sessions'], (r/'policy.json').exists())"
+        )
+        result = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, encoding="utf-8")
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        self.assertEqual(result.stdout.strip(), "1 True")
+        tmp.cleanup()
+
+
+class KnowledgeGapTests(unittest.TestCase):
+    """多来源汲取：只有 1 个来源的声明要能列出来，并给出可补的域名。"""
+
+    def test_single_source_and_missing_domains(self) -> None:
+        tmp = tempfile.TemporaryDirectory()
+        kb = KnowledgeBase(Path(tmp.name) / "knowledge.jsonl")
+        kb.add(claim="A 成立", source_url="https://api.openalex.org/x", accessed_at="2026-01-01T00:00:00Z")
+        gaps = kb.single_source_claims()
+        self.assertEqual(len(gaps), 1)
+        missing = kb.missing_domains("A 成立")
+        self.assertIn("export.arxiv.org", missing)
+        self.assertNotIn("api.openalex.org", missing)
+
+        kb.add(claim="A 成立", source_url="https://export.arxiv.org/y", accessed_at="2026-01-01T00:00:00Z")
+        self.assertEqual(kb.single_source_claims(), [])
+        tmp.cleanup()
+
+
 class CollabTests(unittest.TestCase):
     """v0.8：护甲 / 协作提案 / 涌现代理。"""
 

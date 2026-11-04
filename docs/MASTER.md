@@ -6,6 +6,8 @@
 > 版本：`v0.5.0`　最后更新：2026-11-04
 >
 > **不会写代码？** 先看 [`docs/USER-GUIDE.md`](USER-GUIDE.md)——装好、跑起来、看懂输出，全程复制粘贴。
+>
+> **写文档前先看** [`docs/language.md`](language.md)：禁用心理动词（怕/想/喜欢），行为必须落到可测量上。
 
 ---
 
@@ -146,6 +148,8 @@ python -m lab.cli verify                            # 账本/状态机/知识库
 | `loop --cycles N` | 自驱循环：评测→训练→再评测→变差就回滚 |
 | `collaborate [--choose N]` | 它提 3 个方案，你拍板；选择会改变下次排序 |
 | `emergent` | 行为特征前后对比（可复算） |
+| `knowledge gaps` | 列出只有 1 个来源的声明，并给出可补的域名 |
+| `learn --per-domain N` | 多来源取样，每个域名最多 N 条 |
 | `bench --steps N --seeds N` | 预测基线 |
 | `viz` / `report` | 仪表盘 / 周报 |
 | `verify` / `lint` / `status` | 校验 / 红线 / 状态 |

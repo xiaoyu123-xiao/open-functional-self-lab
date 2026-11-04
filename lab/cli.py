@@ -801,6 +801,15 @@ def cmd_learn(args: argparse.Namespace, ctx: Context) -> int:
             _emit(f"离线目录不存在：{catalog}")
             return EXIT_FAIL
         docs = [json.loads(item.read_text(encoding="utf-8-sig")) for item in sorted(catalog.glob("*.json"))]
+        if args.per_domain and args.per_domain > 0:
+            from collections import defaultdict
+            from urllib.parse import urlparse
+
+            buckets = defaultdict(list)
+            for doc in docs:
+                buckets[urlparse(str(doc["url"])).hostname or "unknown"].append(doc)
+            docs = [doc for items in buckets.values() for doc in items[: args.per_domain]]
+            _emit(f"按域名限流：{len(buckets)} 个来源，各取最多 {args.per_domain} 条")
         urls = [str(doc["url"]) for doc in docs]
         fetcher = OfflineFetcher(catalog)
 
@@ -858,6 +867,17 @@ def cmd_knowledge(args: argparse.Namespace, ctx: Context) -> int:
         for entry in due:
             knowledge.review(int(entry["id"]), "pending", ctx.clock.now_iso(), note="到期自动降级为待验证")
         _emit(f"{len(due)} 条到期，已降级为「待验证」并延长复审周期")
+        return EXIT_OK
+
+    if action == "gaps":
+        gaps = knowledge.single_source_claims()
+        if not gaps:
+            _emit("没有单一来源的声明：所有声明都有 ≥2 个独立域名佐证。")
+            return EXIT_OK
+        _emit(f"{len(gaps)} 条声明只有 1 个来源，需要另一个独立域名交叉验证：")
+        for entry in gaps:
+            missing = knowledge.missing_domains(entry["claim"])[:3]
+            _emit(f"  #{entry['id']} {entry['claim']}　← {entry['source_id']}；可补：{', '.join(missing)}")
         return EXIT_OK
 
     entries = knowledge.current()
@@ -1096,10 +1116,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_learn.add_argument("--online", action="store_true", help="真的联网（需白名单 + 预算 + 人工批准）")
     p_learn.add_argument("--url", action="append", default=None, help="联网时取哪些 URL（可重复）")
     p_learn.add_argument("--tag", action="append", default=None)
+    p_learn.add_argument("--per-domain", type=int, default=0, help="每个来源域名最多取几条（0=不限）")
     p_learn.set_defaults(func=cmd_learn)
 
     p_knowledge = sub.add_parser("knowledge", help="知识库：stats / list / review / check")
-    p_knowledge.add_argument("action", nargs="?", default="stats", choices=["stats", "list", "review", "check"])
+    p_knowledge.add_argument("action", nargs="?", default="stats", choices=["stats", "list", "review", "check", "gaps"])
     p_knowledge.set_defaults(func=cmd_knowledge)
 
     p_self = sub.add_parser("self", help="自我模型：身份 / 能力自评 / 失败模式 / 目标")

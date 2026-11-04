@@ -153,6 +153,25 @@ class KnowledgeBase:
         now = parse_iso(now_iso)
         return [entry for entry in self.current() if parse_iso(entry["next_review_at"]) <= now]
 
+    def single_source_claims(self) -> List[Dict[str, Any]]:
+        """只有 1 个来源的声明：需要另一个独立域名来交叉验证（多来源汲取的落点）。"""
+        return [
+            entry
+            for entry in self.current()
+            if self.independent_sources(entry["claim"]) < VERIFIED_MIN_SOURCES
+        ]
+
+    def missing_domains(self, claim: str) -> List[str]:
+        """这条声明还缺哪些域名的佐证（用于给人/Agent 下一步取样的建议）。"""
+        from .web import ALLOWLIST
+
+        used = {
+            host_of(entry.get("source_url", ""))
+            for entry in self._read_raw()
+            if _normalise(entry.get("claim", "")) == _normalise(claim)
+        }
+        return [domain for domain in ALLOWLIST if domain not in used]
+
     def stats(self) -> Dict[str, Any]:
         entries = self.current()
         by_status: Dict[str, int] = {}
