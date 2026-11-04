@@ -44,6 +44,8 @@ def main(argv: "list[str] | None" = None) -> int:
     args = parser.parse_args(argv)
 
     steps: list[tuple[str, list[str]]] = [
+        ("3.10 兼容性", ["scripts/check_py310.py", "--strict"]),
+        ("语言纪律", ["scripts/check_language.py", "--strict"]),
         ("环境与仓库自检", ["-m", "lab.cli", "doctor"]),
         ("单元测试", ["-m", "unittest", "discover", "-s", "tests", "-q"]),
         ("红线扫描", ["-m", "lab.cli", "lint"]),

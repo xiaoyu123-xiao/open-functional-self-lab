@@ -102,14 +102,14 @@ def cycle(
 def format_cycle(result: Dict[str, Any]) -> str:
     verdict = "保留新策略" if result["improved"] else "回滚到旧策略（没变好）"
     gap = result["after"]["mean_return"] - result["baseline"]["mean_return"]
+    prefix = "致命危险区　" if result["lethal"] else ""
     lines = [
         f"训练前留出分数：{result['before']['mean_return']:+.3f}"
         f"（吃到 {result['before']['ate']}，受伤 {result['before']['hurt']}）",
         f"训练后留出分数：{result['after']['mean_return']:+.3f}"
         f"（吃到 {result['after']['ate']}，受伤 {result['after']['hurt']}）",
         f"变化 {result['delta']:+.3f} → {verdict}",
-        ("致命危险区　" if result["lethal"] else "") + f"BFS 基线 {result["baseline"]["mean_return"]:+.3f}，"
-        f"当前策略与之差 {gap:+.3f}（负数表示还没追上）",
+        f"{prefix}BFS 基线 {result['baseline']['mean_return']:+.3f}，当前策略与之差 {gap:+.3f}（负数表示还没追上）",
         f"难度（危险区数量）{result['hazards']}，Q 表状态数 {result['states']}，账本记录 #{result['record_seq']}",
     ]
     return "\n".join(lines)
