@@ -1317,7 +1317,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_transfer.add_argument("--episodes", type=int, default=50)
     p_transfer.add_argument("--steps", type=int, default=60)
     p_transfer.add_argument("--eval-count", type=int, default=20)
-    p_transfer.add_argument("--algo", choices=["tabular", "linear", "multihead", "weighted"], default="tabular")
+    p_transfer.add_argument("--algo", choices=["tabular", "linear", "multihead", "weighted", "neural"], default="tabular")
     p_transfer.add_argument("--repeats", type=int, default=1, help="用几组不同的初始种子重复，默认 1")
     p_transfer.add_argument("--family", choices=["core", "wide", "corridor"], default="core", help="任务族：core=只变危险区；wide=再变地图尺寸")
     p_transfer.set_defaults(func=cmd_transfer)

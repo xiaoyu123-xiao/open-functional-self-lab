@@ -553,6 +553,39 @@ class WeightedHeadTests(unittest.TestCase):
         self.assertEqual(len(summary["multi"]["runs"][0]["rows"]), len(HELDOUT_CONFIGS))
 
 
+class NeuralTests(unittest.TestCase):
+    """v0.24：纯 Python MLP 策略（能学、能存取、不混用文件）。"""
+
+    def test_neural_learns_on_simple_task(self) -> None:
+        from lab.neural import NeuralQAgent
+
+        agent = NeuralQAgent(seed=0)
+        seeds = eval_seeds(6)
+        before = evaluate(agent, seeds, 40)["mean_return"]
+        for _ in range(4):
+            train(agent, train_seeds(30), 40, epsilon=0.25)
+        after = evaluate(agent, seeds, 40)["mean_return"]
+        self.assertGreater(after, before + 0.5, msg=f"训练前 {before} 训练后 {after}")
+
+    def test_neural_roundtrip_and_guard(self) -> None:
+        from lab.neural import NeuralQAgent
+
+        tmp = Path(tempfile.mkdtemp())
+        path = tmp / "policy.json"
+        agent = NeuralQAgent(path, seed=0)
+        train(agent, train_seeds(5), 20, epsilon=0.3)
+        agent.save()
+        reloaded = NeuralQAgent(path).load()
+        self.assertEqual(reloaded.updates, agent.updates)
+        # 表格/线性存的文件不能被神经版误读
+        QLearningAgent(path, seed=0).save()
+        self.assertEqual(NeuralQAgent(path).load().updates, 0)
+
+    def test_transfer_accepts_neural(self) -> None:
+        summary = run_transfer(rounds=1, episodes=4, steps=20, eval_count=3, algo="neural", repeats=1)
+        self.assertEqual(summary["algo"], "neural")
+
+
 class MultiHeadTests(unittest.TestCase):
     """v0.14：每任务一组权重（按任务身份路由）。"""
 

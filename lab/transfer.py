@@ -23,6 +23,7 @@ from typing import Any, Dict, Iterable, List, Sequence, Tuple
 
 from .agent import QLearningAgent
 from .linear import LinearQAgent, MultiHeadLinearQAgent, WeightedMultiHeadAgent
+from .neural import NeuralQAgent
 from .tasks import baseline_score, eval_seeds, evaluate, train, train_seeds
 
 TRAIN_CONFIGS: Tuple[Dict[str, Any], ...] = (
@@ -124,6 +125,8 @@ def run(
         make_agent = lambda seed: MultiHeadLinearQAgent(seed=seed)
     elif algo == "weighted":
         make_agent = lambda seed: WeightedMultiHeadAgent(seed=seed)
+    elif algo == "neural":
+        make_agent = lambda seed: NeuralQAgent(seed=seed)
     else:
         make_agent = lambda seed: QLearningAgent(seed=seed)
 
