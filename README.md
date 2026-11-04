@@ -13,6 +13,7 @@
 > - 你是另一个 AI 要接手执行 → [`AGENT-RUNBOOK.md`](AGENT-RUNBOOK.md)（含验收标准与停机条件）
 > - 想接大模型 → [`docs/DEPLOY-WITH-MODEL.md`](docs/DEPLOY-WITH-MODEL.md)
 > - 高配机器/GPU → [`docs/HARDWARE.md`](docs/HARDWARE.md)
+> - **一行拿到安全规划** → [`docs/SAFETY.md`](docs/SAFETY.md)（`lab/safety.py`，不依赖本项目其它部分）
 > - 想接自己的环境/模型 → [`docs/EXTEND.md`](docs/EXTEND.md)（20 行）
 > - 只看成果总结 → [`docs/EXPERIMENTS-SUMMARY.md`](docs/EXPERIMENTS-SUMMARY.md)（九次实验，八次是坑）
 > - 想看三个真实接入例子 → [`examples/`](examples/README.md)（评测台 / 模型包装 / 带预算取样）

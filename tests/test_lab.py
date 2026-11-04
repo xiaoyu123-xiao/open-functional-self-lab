@@ -553,6 +553,49 @@ class WeightedHeadTests(unittest.TestCase):
         self.assertEqual(len(summary["multi"]["runs"][0]["rows"]), len(HELDOUT_CONFIGS))
 
 
+class SafetyModuleTests(unittest.TestCase):
+    """v0.51：安全规划抽成可复用模块（外部一行调用）。"""
+
+    def test_path_avoids_hazards(self) -> None:
+        from lab.safety import path_actions
+
+        env = GridWorld(1, size=10, layout="corridor", hazards=6)
+        safe = path_actions(env, avoid_hazards=True)
+        risky = path_actions(env, avoid_hazards=False)
+        self.assertTrue(safe, "安全路径不应为空")
+        self.assertLessEqual(len(safe), 200)
+        # 安全路径的每个落点都不能是危险区
+        x, y = env.agent
+        for action in safe:
+            dx, dy = {"up": (0, 1), "down": (0, -1), "left": (-1, 0), "right": (1, 0)}[action]
+            x, y = x + dx, y + dy
+            self.assertNotIn((x, y), env.hazards)
+        self.assertGreaterEqual(len(risky), 0)
+
+    def test_hazard_aware_path_returns_valid_action(self) -> None:
+        from lab.safety import hazard_aware_path
+
+        env = GridWorld(2, size=10, layout="rooms", hazards=6)
+        step = hazard_aware_path(env)
+        self.assertIn(step, {"up", "down", "left", "right", None})
+
+    def test_safe_planner_reads_state_token(self) -> None:
+        from lab.safety import SafePlanner
+
+        planner = SafePlanner()
+        self.assertEqual(planner.best_action("=U|2|2|0|h1|s0|p1|n3"), "left")
+        self.assertEqual(planner.best_action("=U|2|2|0|h1|s0|p1|n0"), "rest")
+
+    def test_safe_planner_works_as_policy(self) -> None:
+        from lab.safety import SafePlanner
+        from lab.tasks import eval_seeds, run_episode
+
+        rows = [run_episode(SafePlanner(), s, 120, train=False, size=10, layout="corridor",
+                            hazards=6, lethal=False, hurt_penalty=-1.0, shaping="legacy",
+                            with_path=True, shield=True) for s in eval_seeds(3)]
+        self.assertTrue(all(r["hurt"] == 0 for r in rows), "安全规划不应受伤")
+
+
 class FrontierTests(unittest.TestCase):
     """v0.47：预算前沿——按受伤预算选最优策略。"""
 
