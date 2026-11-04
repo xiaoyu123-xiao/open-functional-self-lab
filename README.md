@@ -2,6 +2,14 @@
 
 > 研究"功能性自我模型"和开放式研究循环。**我们不宣称任何系统拥有意识。**
 >
+> **先读哪一份？**
+> - 完全不懂它是什么 → [`docs/WHAT-IS-IT.md`](docs/WHAT-IS-IT.md)（2 分钟，有图有例子）
+> - 想直接跑 → [`docs/USER-GUIDE.md`](docs/USER-GUIDE.md)（复制粘贴即可）
+> - 你是另一个 AI 要接手执行 → [`AGENT-RUNBOOK.md`](AGENT-RUNBOOK.md)（含验收标准与停机条件）
+> - 想接大模型 → [`docs/DEPLOY-WITH-MODEL.md`](docs/DEPLOY-WITH-MODEL.md)
+> - 高配机器/GPU → [`docs/HARDWARE.md`](docs/HARDWARE.md)
+> - 全貌 → [`docs/MASTER.md`](docs/MASTER.md)
+>
 > 📖 **不会写代码？** 直接看 [使用手册 docs/USER-GUIDE.md](docs/USER-GUIDE.md)：装好、跑起来、看懂输出，全程复制粘贴。
 > 🗺️ **想了解全貌？** 看 [总册 docs/MASTER.md](docs/MASTER.md)：需求、架构、模块、命令、路线图、边界。
 
@@ -9,6 +17,19 @@
 审计账本、红线、可视化——先做成可执行、可测试、可回滚的代码。
 
 `Python ≥ 3.10` · 零第三方依赖 · 纯 CPU · 离线可跑 · MIT
+
+
+## 证据（可复算）
+
+| 任务 | 手写 BFS 规则 | 学出来的策略 |
+|---|---|---|
+| 危险区致命，8 个 | −1.758 | **+1.597** |
+| 危险区致命，10 个 | −2.340 | **+0.573** |
+
+复算：`python -m lab.cli transfer --algo weighted --repeats 5`
+
+> 只在单一地图族上成立（只变危险区数量），不要外推。5 组复现胜率 100%，未做统计检验。
+> 全部实验记录（含 4 次失败）在 [`docs/experiments/`](docs/experiments/)。
 
 ## 五分钟跑通
 
