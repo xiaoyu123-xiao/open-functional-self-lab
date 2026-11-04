@@ -41,13 +41,21 @@ if ($dirty) {
 
 # 很多人装过代理软件，卸载/关闭后系统里仍留着 HTTP_PROXY 之类的环境变量，
 # git 会连一个死端口，或者干脆解析不了域名。这里只在本次脚本内绕过，不改你的系统设置。
-$proxyVars = @('HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'http_proxy', 'https_proxy', 'all_proxy')
+# 注意：Windows 环境变量名不区分大小写，HTTP_PROXY 与 http_proxy 是同一项，必须先按小写去重。
+$proxyVars = @()
+$seen = @{}
+foreach ($item in (Get-ChildItem Env:)) {
+    $lower = $item.Name.ToLowerInvariant()
+    if (($lower -eq 'http_proxy' -or $lower -eq 'https_proxy' -or $lower -eq 'all_proxy') -and -not $seen.ContainsKey($lower)) {
+        $seen[$lower] = $true
+        $proxyVars += $item.Name
+    }
+}
 $cleared = @()
 foreach ($name in $proxyVars) {
-    if (Test-Path "Env:$name") {
-        $cleared += "$name=$((Get-Item "Env:$name").Value)"
-        Remove-Item "Env:$name"
-    }
+    $value = (Get-ChildItem "Env:$name").Value
+    $cleared += "$name=$value"
+    Remove-Item "Env:$name" -ErrorAction SilentlyContinue
 }
 if ($cleared.Count -gt 0) {
     Write-Host "已在本窗口内忽略代理环境变量：$($cleared -join '; ')" -ForegroundColor Yellow
