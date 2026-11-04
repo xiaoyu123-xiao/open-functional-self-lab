@@ -47,6 +47,7 @@ class GridWorld:
         slippery: float = 0.0,
         hazard_drift: int = 0,
         one_hit: bool = False,
+        starve_ends: bool = False,
     ) -> None:
         rng = random.Random(seed)
         self.size = int(size)
@@ -55,6 +56,7 @@ class GridWorld:
         self.rng = rng
         self.hazard_drift = int(hazard_drift)
         self.one_hit = bool(one_hit)
+        self.starve_ends = bool(starve_ends)
         self.steps_taken = 0
         cells = [(x, y) for x in range(self.size) for y in range(self.size)]
         rng.shuffle(cells)
@@ -180,6 +182,8 @@ class GridWorld:
         if self.has_armor and self.armor < ARMOR_MAX:
             self.armor = min(ARMOR_MAX, self.armor + ARMOR_REGEN)
         self.energy = max(0.0, self.energy - ENERGY_COST_PER_STEP)
+        if self.starve_ends and self.energy <= 0.0:
+            self.dead = True            # v0.43：饿死也算结束（否则"不动"永远是划算的）
         if self.one_hit and hurt:
             self.dead = True          # v0.35：碰一下即结束
         elif self.lethal and self.damage >= DAMAGE_MAX:
