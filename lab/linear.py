@@ -132,3 +132,76 @@ class LinearQAgent:
     def describe(self) -> str:
         top = max(ACTIONS, key=lambda action: sum(abs(v) for v in self.w[action]))
         return f"linear（{STATE_DIM} 维权重 × {len(ACTIONS)} 动作，更新 {self.updates} 次，权重最大在 {top}）"
+
+
+class MultiHeadLinearQAgent(LinearQAgent):
+    """每任务一组权重（v0.14）。
+
+    动机（实验 0006）：共享权重同时服务互相冲突的目标，会互相干扰。
+    做法：按状态里的任务身份（`h0..h3`）路由到不同的权重组；
+    遇到没见过的任务，用最接近的已有组（就近回退），而不是从零开始。
+    """
+
+    algo = "multihead"
+
+    def __init__(self, path: "str | Path | None" = None, seed: int = 0) -> None:
+        super().__init__(path, seed)
+        self.heads: Dict[str, Dict[str, List[float]]] = {}
+
+    # ---------- 路由 ----------
+
+    @staticmethod
+    def head_of(state: str) -> str:
+        for token in state.split("|"):
+            if len(token) == 2 and token.startswith("h") and token[1].isdigit():
+                return token
+        return "h1"
+
+    def head(self, state: str) -> Dict[str, List[float]]:
+        key = self.head_of(state)
+        if key not in self.heads:
+            # 就近回退：h3 找不到就用 h2，以此类推；都没有才新建
+            candidate = key
+            for number in range(int(key[1]) - 1, -1, -1):
+                if f"h{number}" in self.heads:
+                    candidate = f"h{number}"
+                    break
+            self.heads[key] = {action: list(self.heads.get(candidate, {}).get(action, [0.0] * STATE_DIM)) for action in ACTIONS}
+        return self.heads[key]
+
+    def value(self, state: str) -> Dict[str, float]:
+        phi = featurize(state)
+        head = self.head(state)
+        return {action: sum(w * v for w, v in zip(head[action], phi)) for action in ACTIONS}
+
+    def update(self, state: str, action: str, reward: float, next_state: str) -> None:
+        phi = featurize(state)
+        head = self.head(state)
+        target = reward + 0.95 * max(self.value(next_state).values())
+        error = target - sum(w * v for w, v in zip(head[action], phi))
+        alpha = 0.05 / math.sqrt(1.0 + self.updates / 500.0)
+        weights = head[action]
+        for index, feature in enumerate(phi):
+            if feature:
+                weights[index] += alpha * error * feature
+        self.updates += 1
+
+    def save(self) -> None:
+        if self.path is None:
+            return
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        payload = {"version": 3, "algo": self.algo, "updates": self.updates, "heads": self.heads}
+        self.path.write_text(json.dumps(payload, ensure_ascii=False, sort_keys=True) + "\n", encoding="utf-8")
+
+    def load(self) -> "MultiHeadLinearQAgent":
+        if self.path is None or not self.path.exists():
+            return self
+        payload = json.loads(self.path.read_text(encoding="utf-8"))
+        if payload.get("algo") != self.algo:
+            return self
+        self.heads = {
+            key: {action: [float(v) for v in row] for action, row in head.items()}
+            for key, head in payload.get("heads", {}).items()
+        }
+        self.updates = int(payload.get("updates", 0))
+        return self

@@ -21,7 +21,7 @@ from __future__ import annotations
 from typing import Any, Dict, Iterable, List, Sequence, Tuple
 
 from .agent import QLearningAgent
-from .linear import LinearQAgent
+from .linear import LinearQAgent, MultiHeadLinearQAgent
 from .tasks import baseline_score, eval_seeds, evaluate, train, train_seeds
 
 TRAIN_CONFIGS: Tuple[Dict[str, Any], ...] = (
@@ -83,7 +83,12 @@ def run(
     algo: str = "tabular",
 ) -> Dict[str, Any]:
     seeds = eval_seeds(eval_count)
-    make_agent = (lambda: LinearQAgent(seed=11)) if algo == "linear" else (lambda: QLearningAgent(seed=11))
+    if algo == "linear":
+        make_agent = lambda: LinearQAgent(seed=11)
+    elif algo == "multihead":
+        make_agent = lambda: MultiHeadLinearQAgent(seed=11)
+    else:
+        make_agent = lambda: QLearningAgent(seed=11)
 
     single = make_agent()
     single_episodes = train_multi(single, [TRAIN_CONFIGS[0]], rounds, episodes, steps)

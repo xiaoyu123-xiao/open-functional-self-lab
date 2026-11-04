@@ -1,13 +1,13 @@
 # 实验台仪表盘
 
 > 本文件由 `python -m lab.cli viz` 自动生成，请勿手改。
-> 生成时间：`2026-11-04T07:37:50Z`　当前状态：**READY**（就绪）
+> 生成时间：`2026-11-04T07:44:57Z`　当前状态：**READY**（就绪）
 
 ## 1. 概览
 
 | 指标 | 值 |
 |---|---|
-| 账本事件数 | 459 |
+| 账本事件数 | 460 |
 | 状态转换次数 | 22 |
 | 回滚次数 | 0 |
 | 告警数 / 已回应 | 3 / 1 |
@@ -28,7 +28,6 @@
 
 | seq | 时间 | 事件 | 摘要 |
 |---|---|---|---|
-| 452 | `2026-11-04T07:19:00Z` | `autonomy` | by=xiaoyu123-xiao, capabilities=['web.fetch', 'gpu.train', 'storage.write', 'repo.private-read'], days=90 |
 | 453 | `2026-11-04T07:19:00Z` | `cycle` | after=2.4, algo=tabular, armor=False |
 | 454 | `2026-11-04T07:19:00Z` | `cycle` | after=2.2487, algo=tabular, armor=False |
 | 455 | `2026-11-04T07:23:19Z` | `cycle` | after=0.8333, algo=tabular, armor=False |
@@ -36,6 +35,7 @@
 | 457 | `2026-11-04T07:32:20Z` | `transfer` | multi_mean=0.1046, ratio=0.1418, single_mean=0.7375 |
 | 458 | `2026-11-04T07:37:22Z` | `transfer` | multi_mean=-0.6942, ratio=0.6611, single_mean=-1.05 |
 | 459 | `2026-11-04T07:37:29Z` | `transfer` | multi_mean=0.4562, ratio=0.5041, single_mean=0.905 |
+| 460 | `2026-11-04T07:44:35Z` | `transfer` | multi_mean=0.9329, ratio=0.9864, single_mean=0.9458 |
 
 ## 4. 状态机
 

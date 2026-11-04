@@ -32,7 +32,13 @@ from lab.transfer import HELDOUT_CONFIGS, TRAIN_CONFIGS  # noqa: E402
 from lab.transfer import run as run_transfer  # noqa: E402
 from lab.knowledge import KnowledgeBase  # noqa: E402
 from lab.agent import QLearningAgent  # noqa: E402
-from lab.linear import STATE_DIM, STATE_DIM_WITH_WALLS, LinearQAgent, featurize  # noqa: E402
+from lab.linear import (  # noqa: E402
+    STATE_DIM,
+    STATE_DIM_WITH_WALLS,
+    LinearQAgent,
+    MultiHeadLinearQAgent,
+    featurize,
+)
 from lab.tasks import (  # noqa: E402
     assert_disjoint,
     baseline_score,
@@ -428,6 +434,31 @@ class TransferTests(unittest.TestCase):
         train_keys = {(c["hazards"], c["lethal"]) for c in TRAIN_CONFIGS}
         heldout_keys = {(c["hazards"], c["lethal"]) for c in HELDOUT_CONFIGS}
         self.assertEqual(train_keys & heldout_keys, set())
+
+
+class MultiHeadTests(unittest.TestCase):
+    """v0.14：每任务一组权重（按任务身份路由）。"""
+
+    def test_heads_are_created_per_task_and_roundtrip(self) -> None:
+        tmp = tempfile.TemporaryDirectory()
+        path = Path(tmp.name) / "policy.json"
+        agent = MultiHeadLinearQAgent(path, seed=0)
+        train(agent, train_seeds(8), 30, epsilon=0.3, lethal=True, hazards=4)
+        train(agent, train_seeds(8), 30, epsilon=0.3, lethal=True, hazards=10)
+        self.assertIn("h1", agent.heads)
+        self.assertIn("h3", agent.heads)
+        agent.save()
+        reloaded = MultiHeadLinearQAgent(path).load()
+        self.assertEqual(sorted(reloaded.heads), sorted(agent.heads))
+        self.assertGreater(reloaded.updates, 0)
+        tmp.cleanup()
+
+    def test_unseen_task_falls_back_to_nearest_head(self) -> None:
+        agent = MultiHeadLinearQAgent(seed=0)
+        agent.head("=U|2|2|0|h2")
+        self.assertIn("h2", agent.heads)
+        neighbor = agent.head("=U|2|2|0|h3")   # h3 未训练 → 回退到 h2
+        self.assertEqual(len(neighbor["up"]), len(agent.heads["h2"]["up"]))
 
 
 class AutonomyTests(unittest.TestCase):
