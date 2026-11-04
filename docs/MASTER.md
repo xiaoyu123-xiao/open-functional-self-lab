@@ -125,6 +125,8 @@ python -m lab.cli verify                            # 账本/状态机/知识库
 | `lab/tasks.py` | 训练/留出 seed 分离 + 课程 + BFS 对照 | `eval` | ✅ |
 | `lab/loop.py` | 自驱循环一轮：评测→训练→再评测→变差回滚 | `loop` | ✅ |
 | `lab/collab.py` | 协作提案 + 涌现代理指标 | `collaborate` / `emergent` | ✅ |
+| `lab/store.py` | SQLite 持久层（索引/热备份，可迁云数据库） | `db sync/stats/backup` | ✅ |
+| `lab/perm.py` | 权限申请/批准（它开口要，人批准） | `ask` / `grant` / `deny` / `perms` | ✅ |
 | `lab/plugins/` | 插件接口（manifest + 红线 + 预算声明） | — | ⬜ 下一版 |
 | `lab/loop.py` | 自驱循环（不需逐条敲命令） | `loop` | ⬜ v0.3 下一步 |
 
@@ -149,6 +151,10 @@ python -m lab.cli verify                            # 账本/状态机/知识库
 | `collaborate [--choose N]` | 它提 3 个方案，你拍板；选择会改变下次排序 |
 | `emergent` | 行为特征前后对比（可复算） |
 | `knowledge gaps` | 列出只有 1 个来源的声明，并给出可补的域名 |
+| `db sync/stats/backup` | 账本镜像到 SQLite / 看统计 / 热备份 |
+| `ask --resource R --reason ...` | 它申请权限 |
+| `grant <id> --scope S --by 你` | 你批准（默认 24h 过期） |
+| `perms` | 看申请与批准状态 |
 | `learn --per-domain N` | 多来源取样，每个域名最多 N 条 |
 | `bench --steps N --seeds N` | 预测基线 |
 | `viz` / `report` | 仪表盘 / 周报 |

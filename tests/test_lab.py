@@ -26,6 +26,8 @@ from lab.env import GridWorld, greedy_action  # noqa: E402
 from lab.notify import Notifier  # noqa: E402
 from lab.selfmodel import SelfModel  # noqa: E402
 from lab.collab import analyse, build_proposals, emergent_gap  # noqa: E402
+from lab.perm import Permissions  # noqa: E402
+from lab.store import SqliteStore  # noqa: E402
 from lab.knowledge import KnowledgeBase  # noqa: E402
 from lab.agent import QLearningAgent  # noqa: E402
 from lab.linear import STATE_DIM, STATE_DIM_WITH_WALLS, LinearQAgent, featurize  # noqa: E402
@@ -399,6 +401,62 @@ class LethalTaskTests(unittest.TestCase):
         result = run_episode(agent, 9001, 60, train=False, lethal=True)
         self.assertIn("dead", result)
         self.assertLessEqual(result["steps"], 60)
+
+
+class StorageAndPermissionTests(unittest.TestCase):
+    """v0.10：SQLite 持久层 + 权限申请/批准。"""
+
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+        self.ledger = Ledger(self.root / "ledger.jsonl")
+        self.ts = "2026-01-01T00:00:00Z"
+
+    def tearDown(self) -> None:
+        self.tmp.cleanup()
+
+    def test_sqlite_sync_is_idempotent(self) -> None:
+        self.ledger.append("step", {"step": 1}, self.ts)
+        self.ledger.append("step", {"step": 2}, self.ts)
+        store = SqliteStore(self.root / "lab.sqlite3")
+        first = store.sync_ledger(self.ledger)
+        second = store.sync_ledger(self.ledger)
+        self.assertEqual(first["inserted"], 2)
+        self.assertEqual(second["inserted"], 0)
+        self.assertEqual(store.stats()["events"], 2)
+
+    def test_sqlite_backup_creates_file(self) -> None:
+        self.ledger.append("step", {"step": 1}, self.ts)
+        store = SqliteStore(self.root / "lab.sqlite3")
+        store.sync_ledger(self.ledger)
+        target = store.backup(self.root / "backup.sqlite3")
+        self.assertTrue(Path(target).exists())
+        self.assertGreater(Path(target).stat().st_size, 0)
+
+    def test_permission_lifecycle(self) -> None:
+        perms = Permissions(self.root / "perms.json")
+        request = perms.request(self.ledger, self.ts, "web.fetch", "取资料")
+        self.assertFalse(perms.check("web.fetch", self.ts))
+        perms.grant(self.ledger, self.ts, request["id"], "read", "manager", ttl_hours=1)
+        self.assertTrue(perms.check("web.fetch", self.ts))
+        # 一小时后过期
+        self.assertFalse(perms.check("web.fetch", "2026-01-01T02:00:00Z"))
+
+    def test_denied_permission_stays_denied(self) -> None:
+        perms = Permissions(self.root / "perms.json")
+        request = perms.request(self.ledger, self.ts, "gpu.a100", "想跑大模型")
+        perms.deny(self.ledger, self.ts, request["id"], "manager", "预算不够")
+        self.assertFalse(perms.check("gpu.a100", self.ts))
+        self.assertEqual(perms.pending(), [])
+        with self.assertRaises(ValueError):
+            perms.grant(self.ledger, self.ts, request["id"], "read", "manager")
+
+    def test_learn_online_requires_permission(self) -> None:
+        root = Path(self.tmp.name)
+        args = ["--root", str(root), "--fake-now", self.ts]
+        self.assertEqual(cli_main([*args, "init"]), 0)
+        code = cli_main([*args, "learn", "--online", "--url", "https://export.arxiv.org/api/query"])
+        self.assertEqual(code, 1)
 
 
 class ContinuityTests(unittest.TestCase):

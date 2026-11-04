@@ -32,6 +32,8 @@ from .predict import benchmark as run_benchmark
 from .collab import analyse as analyse_behaviour
 from .collab import build_proposals, emergent_gap, record_choice
 from .knowledge import KnowledgeBase
+from .perm import Permissions
+from .store import SqliteStore
 from .loop import cycle as run_cycle, format_cycle
 from .selfmodel import SelfModel
 from .web import LiveFetcher, OfflineFetcher, fetch_many
@@ -97,6 +99,12 @@ class Context:
                 else:
                     merged[key] = value
         return merged
+
+    def db(self) -> SqliteStore:
+        return SqliteStore(self.state_dir / "lab.sqlite3")
+
+    def permissions(self) -> Permissions:
+        return Permissions(self.state_dir / "perms.json")
 
     def knowledge(self) -> KnowledgeBase:
         return KnowledgeBase(self.state_dir / "knowledge.jsonl")
@@ -610,6 +618,65 @@ def cmd_review(args: argparse.Namespace, ctx: Context) -> int:
     return EXIT_OK
 
 
+# ---------------------------------------------------------------- db / ask / grant
+
+
+def cmd_db(args: argparse.Namespace, ctx: Context) -> int:
+    store = ctx.db()
+    if args.action == "backup":
+        target = args.to or (ctx.state_dir / "backups" / f"lab-{ctx.clock.now().strftime('%Y%m%d-%H%M%S')}.sqlite3")
+        path = store.backup(target)
+        _emit(f"已热备份到 {path}（可用 sqlite3 直接打开，不需要停机）")
+        return EXIT_OK
+    if args.action == "sync":
+        ledger_stats = store.sync_ledger(ctx.ledger)
+        state_stats = store.sync_state(ctx, ctx.clock.now_iso())
+        _emit(f"同步完成：账本 {ledger_stats['ledger_records']} 条（新增 {ledger_stats['inserted']}），"
+              f"快照 {state_stats['snapshots']} 份")
+        _emit("提示：SQLite 是索引/备份层；账本 JSONL 仍是唯一事实来源，删库可重建。")
+        return EXIT_OK
+    stats = store.stats()
+    _emit(f"数据库：{stats['path']}")
+    _emit(f"  事件 {stats['events']} 条，快照 {stats['kv_rows']} 份，大小 {stats['size_kb']} KB")
+    _emit(f"  时间范围：{stats['first_ts']} → {stats['last_ts']}")
+    return EXIT_OK
+
+
+def cmd_ask(args: argparse.Namespace, ctx: Context) -> int:
+    entry = ctx.permissions().request(ctx.ledger, ctx.clock.now_iso(), args.resource, args.reason)
+    _emit(f"已向管理者申请权限：{entry['id']}")
+    _emit(f"  资源：{entry['resource']}")
+    _emit(f"  理由：{entry['reason']}")
+    _emit(f"批准：python -m lab.cli grant {entry['id']} --scope read --by 你的名字")
+    return EXIT_OK
+
+
+def cmd_grant(args: argparse.Namespace, ctx: Context) -> int:
+    try:
+        grant = ctx.permissions().grant(ctx.ledger, ctx.clock.now_iso(), args.request_id, args.scope, args.by,
+                                        ttl_hours=args.ttl_hours)
+    except (KeyError, ValueError) as error:
+        _emit(f"批准失败：{error}")
+        return EXIT_USAGE
+    _emit(f"已批准：{grant['resource']}（范围 {grant['scope']}，到期 {grant['expires_at']}）")
+    return EXIT_OK
+
+
+def cmd_deny(args: argparse.Namespace, ctx: Context) -> int:
+    try:
+        ctx.permissions().deny(ctx.ledger, ctx.clock.now_iso(), args.request_id, args.by, args.reason or "")
+    except KeyError as error:
+        _emit(f"拒绝失败：{error}")
+        return EXIT_USAGE
+    _emit("已拒绝，理由已记入账本。")
+    return EXIT_OK
+
+
+def cmd_perms(args: argparse.Namespace, ctx: Context) -> int:
+    _emit(ctx.permissions().describe(ctx.clock.now_iso()))
+    return EXIT_OK
+
+
 # ---------------------------------------------------------------- collaborate / emergent
 
 
@@ -794,6 +861,11 @@ def cmd_learn(args: argparse.Namespace, ctx: Context) -> int:
         if not args.url:
             _emit("--online 需要至少一个 --url，且域名必须在白名单里")
             return EXIT_USAGE
+        if not ctx.permissions().check("web.fetch", ctx.clock.now_iso()):
+            _emit("还没有联网权限。先申请：")
+            _emit('  python -m lab.cli ask --resource web.fetch --reason "从白名单源取声明以做交叉验证"')
+            _emit("  然后由管理者批准：python -m lab.cli grant <申请编号> --scope read --by 你的名字")
+            return EXIT_FAIL
         urls = list(args.url)
         fetcher = LiveFetcher(allow_network=True)
     else:
@@ -1071,6 +1143,32 @@ def build_parser() -> argparse.ArgumentParser:
     p_bench.add_argument("--steps", type=int, default=200, help="每个 seed 跑多少步")
     p_bench.add_argument("--seeds", type=int, default=3, help="用几个 seed（1..N）")
     p_bench.set_defaults(func=cmd_bench)
+
+    p_db = sub.add_parser("db", help="持久层：sync / stats / backup")
+    p_db.add_argument("action", nargs="?", default="stats", choices=["stats", "sync", "backup"])
+    p_db.add_argument("--to", default=None, help="备份目标路径")
+    p_db.set_defaults(func=cmd_db)
+
+    p_ask = sub.add_parser("ask", help="向管理者申请权限")
+    p_ask.add_argument("--resource", required=True, help="要什么，例如 web.fetch / gpu.a100")
+    p_ask.add_argument("--reason", required=True)
+    p_ask.set_defaults(func=cmd_ask)
+
+    p_grant = sub.add_parser("grant", help="管理者批准一条权限申请")
+    p_grant.add_argument("request_id")
+    p_grant.add_argument("--scope", default="read", help="批准范围，例如 read / once / web.fetch:arxiv")
+    p_grant.add_argument("--by", default="human")
+    p_grant.add_argument("--ttl-hours", type=int, default=24)
+    p_grant.set_defaults(func=cmd_grant)
+
+    p_deny = sub.add_parser("deny", help="管理者拒绝一条申请")
+    p_deny.add_argument("request_id")
+    p_deny.add_argument("--by", default="human")
+    p_deny.add_argument("--reason", default="")
+    p_deny.set_defaults(func=cmd_deny)
+
+    p_perms = sub.add_parser("perms", help="看权限现状")
+    p_perms.set_defaults(func=cmd_perms)
 
     p_collab = sub.add_parser("collaborate", help="它提方案、你拍板（会记住你的偏好）")
     p_collab.add_argument("--choose", type=int, default=None, help="选第几个方案")

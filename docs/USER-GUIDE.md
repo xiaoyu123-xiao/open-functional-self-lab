@@ -116,6 +116,8 @@ BFS 基线 +3.565，当前策略与之差 -1.365（负数表示还没追上）
 | 单独考试（不训练） | `python -m lab.cli eval` | 5 秒 |
 | 看它对自己的描述 | `python -m lab.cli self` | 1 秒 |
 | 看知识库里有什么 | `python -m lab.cli knowledge list` | 1 秒 |
+| **给它开权限**（它申请、你批准） | `python -m lab.cli perms` 然后 `grant <编号> --by 你` | 5 秒 |
+| 备份数据到 SQLite | `python -m lab.cli db sync && python -m lab.cli db backup` | 2 秒 |
 | 收一批资料 | `python -m lab.cli learn` | 1 秒 |
 | 看有没有事需要你处理 | `python -m lab.cli inbox` | 1 秒 |
 | 和它一起决定下一步 | `python -m lab.cli collaborate` 然后 `--choose 1` | 2 秒 |
