@@ -43,6 +43,13 @@
 | 加语言 | [i18n.md](i18n.md) |
 | 推广 | [promotion.md](promotion.md) |
 
+## 想把它讲出去
+
+| 用途 | 文件 |
+|---|---|
+| B 站视频分镜 + 口播稿 + 录屏清单 | [BILIBILI-SCRIPT.md](BILIBILI-SCRIPT.md) |
+| 专栏 / 知乎 / 掘金文字版 | [ARTICLE.md](ARTICLE.md) |
+
 ## 内部参考
 
 | 内容 | 去哪 |
