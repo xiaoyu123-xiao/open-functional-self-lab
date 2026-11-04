@@ -39,30 +39,21 @@ if ($dirty) {
     exit 1
 }
 
-# 很多人装过代理软件，卸载/关闭后系统里仍留着 HTTP_PROXY 之类的环境变量，
-# git 会连一个死端口，或者干脆解析不了域名。这里只在本次脚本内绕过，不改你的系统设置。
-# 注意：Windows 环境变量名不区分大小写，HTTP_PROXY 与 http_proxy 是同一项，必须先按小写去重。
-$proxyVars = @()
-$seen = @{}
-foreach ($item in (Get-ChildItem Env:)) {
-    $lower = $item.Name.ToLowerInvariant()
-    if (($lower -eq 'http_proxy' -or $lower -eq 'https_proxy' -or $lower -eq 'all_proxy') -and -not $seen.ContainsKey($lower)) {
-        $seen[$lower] = $true
-        $proxyVars += $item.Name
-    }
+# 很多人装过代理软件，关闭后系统里仍留着 HTTP_PROXY / HTTPS_PROXY 之类的环境变量，
+# git 会去连一个死端口，甚至解析不了域名（Could not resolve host）。
+# 处理方式：不改你的系统设置，只在本次 git 调用上加 `-c http.proxy=` 强制直连。
+# 注意：不能枚举 Env: 提供程序——环境里同时存在 HTTP_PROXY 与 http_proxy 时它会直接抛异常。
+$proxyHint = @()
+foreach ($name in @('HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY')) {
+    $value = [System.Environment]::GetEnvironmentVariable($name)
+    if ($value) { $proxyHint += "$name=$value" }
 }
-$cleared = @()
-foreach ($name in $proxyVars) {
-    $value = (Get-ChildItem "Env:$name").Value
-    $cleared += "$name=$value"
-    Remove-Item "Env:$name" -ErrorAction SilentlyContinue
-}
-if ($cleared.Count -gt 0) {
-    Write-Host "已在本窗口内忽略代理环境变量：$($cleared -join '; ')" -ForegroundColor Yellow
+if ($proxyHint.Count -gt 0) {
+    Write-Host "检测到代理环境变量（本次推送强制直连，不改系统设置）：$($proxyHint -join '; ')" -ForegroundColor Yellow
 }
 
 Write-Host "== 3/4 探测能否访问仓库 ==" -ForegroundColor Cyan
-$probe = git -c http.proxy= ls-remote --exit-code $remote 2>&1
+$probe = git -c http.proxy= -c https.proxy= ls-remote --exit-code $remote 2>&1
 if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne 2) {
     Write-Host "连不上 $remote" -ForegroundColor Red
     Write-Host ($probe | Out-String)
@@ -75,16 +66,16 @@ if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne 2) {
 Write-Host "可以访问（空仓库会返回 2，属正常；0 表示已有提交）"
 
 Write-Host "== 4/4 推送 main 和 tag ==" -ForegroundColor Cyan
-git -c http.proxy= push -u origin main
+git -c http.proxy= -c https.proxy= push -u origin main
 if ($LASTEXITCODE -ne 0) {
     Write-Host "推送失败。常见原因：认证被取消 / 网络抖动 / 远端已有提交。见 docs/publish.md 第 10 节。" -ForegroundColor Red
     exit 1
 }
 
 $tag = git describe --tags --abbrev=0
-git -c http.proxy= push origin $tag
+git -c http.proxy= -c https.proxy= push origin $tag
 if ($LASTEXITCODE -ne 0) {
-    Write-Host "tag 推送失败（main 已推上去）。手动重试：git -c http.proxy= push origin $tag" -ForegroundColor Yellow
+    Write-Host "tag 推送失败（main 已推上去）。手动重试：git -c http.proxy= -c https.proxy= push origin $tag" -ForegroundColor Yellow
     exit 1
 }
 
