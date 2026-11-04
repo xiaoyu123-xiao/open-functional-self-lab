@@ -58,7 +58,7 @@ Windows / macOS / Linux 命令相同。想完全复现某次运行：加 `--fake
 | **取样入库**：白名单 → 声明 → 独立性 → 复审 | `lab/web.py` · `lab/knowledge.py` · `lab learn` |
 | 紧急冻结开关 | `lab freeze` / `lab unfreeze --by <你>` |
 
-**已验证**：10 项自检全过 · 101 个 unittest · CI 覆盖 Python 3.10–3.13 · 干净 clone 复验通过。
+**已验证**：10 项自检全过 · 103 个 unittest · CI 覆盖 Python 3.10–3.13 · 干净 clone 复验通过。
 
 ## 参与
 

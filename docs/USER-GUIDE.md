@@ -124,6 +124,7 @@ BFS 基线 +3.565，当前策略与之差 -1.365（负数表示还没追上）
 | 看有没有事需要你处理 | `python -m lab.cli inbox` | 1 秒 |
 | 和它一起决定下一步 | `python -m lab.cli collaborate` 然后 `--choose 1` | 2 秒 |
 | 看它的行为有没有变化 | `python -m lab.cli emergent` | 1 秒 |
+| 看它能不能举一反三（迁移） | `python -m lab.cli transfer` | 2~3 分钟 |
 
 **全部命令**在 `docs/MASTER.md` 第 5 节，命令后加 `-h` 可以看参数，例如 `python -m lab.cli loop -h`。
 

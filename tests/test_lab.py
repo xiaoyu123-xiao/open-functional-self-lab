@@ -28,6 +28,8 @@ from lab.selfmodel import SelfModel  # noqa: E402
 from lab.collab import analyse, build_proposals, emergent_gap  # noqa: E402
 from lab.perm import Permissions  # noqa: E402
 from lab.store import SqliteStore  # noqa: E402
+from lab.transfer import HELDOUT_CONFIGS, TRAIN_CONFIGS  # noqa: E402
+from lab.transfer import run as run_transfer  # noqa: E402
 from lab.knowledge import KnowledgeBase  # noqa: E402
 from lab.agent import QLearningAgent  # noqa: E402
 from lab.linear import STATE_DIM, STATE_DIM_WITH_WALLS, LinearQAgent, featurize  # noqa: E402
@@ -401,6 +403,26 @@ class LethalTaskTests(unittest.TestCase):
         result = run_episode(agent, 9001, 60, train=False, lethal=True)
         self.assertIn("dead", result)
         self.assertLessEqual(result["steps"], 60)
+
+
+class TransferTests(unittest.TestCase):
+    """v0.12：跨任务迁移（当前结果是失败，但接口与判据必须固定）。"""
+
+    def test_transfer_returns_expected_shape(self) -> None:
+        summary = run_transfer(rounds=1, episodes=6, steps=20, eval_count=3)
+        self.assertIn("single", summary)
+        self.assertIn("multi", summary)
+        self.assertIn("ratio", summary)
+        self.assertIsInstance(summary["transfer_helped"], bool)
+        self.assertEqual(len(summary["multi"]["rows"]), len(HELDOUT_CONFIGS))
+        # 判据写死：≥1.05 才算迁移有帮助
+        if summary["ratio"] is not None:
+            self.assertEqual(summary["transfer_helped"], summary["ratio"] >= 1.05)
+
+    def test_train_and_heldout_configs_are_disjoint(self) -> None:
+        train_keys = {(c["hazards"], c["lethal"]) for c in TRAIN_CONFIGS}
+        heldout_keys = {(c["hazards"], c["lethal"]) for c in HELDOUT_CONFIGS}
+        self.assertEqual(train_keys & heldout_keys, set())
 
 
 class AutonomyTests(unittest.TestCase):

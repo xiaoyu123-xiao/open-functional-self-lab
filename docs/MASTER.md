@@ -127,6 +127,7 @@ python -m lab.cli verify                            # 账本/状态机/知识库
 | `lab/collab.py` | 协作提案 + 涌现代理指标 | `collaborate` / `emergent` | ✅ |
 | `lab/store.py` | SQLite 持久层（索引/热备份，可迁云数据库） | `db sync/stats/backup` | ✅ |
 | `lab/perm.py` | 权限申请/批准 + **自主级别（locked/supervised/full）** | `ask` / `grant` / `deny` / `perms` / `autonomy` | ✅ |
+| `lab/transfer.py` | 跨任务迁移实验（多配置训练 / 留出配置评测） | `transfer` | 🟡 失败，已定位 |
 | `lab/plugins/` | 插件接口（manifest + 红线 + 预算声明） | — | ⬜ 下一版 |
 | `lab/loop.py` | 自驱循环（不需逐条敲命令） | `loop` | ⬜ v0.3 下一步 |
 
@@ -158,6 +159,7 @@ python -m lab.cli verify                            # 账本/状态机/知识库
 | `autonomy --level full --by 你 --days 90` | 一次性标准授权（之后不再逐条申请） |
 | `autonomy --revoke --by 你` | 一键收回，降回 supervised |
 | `auto --cycles N` | 无人值守：连续跑，遇预算/冻结/待评审自动停 |
+| `transfer` | 多任务训练 + 留出配置评测（当前结论：迁移失败） |
 | `learn --per-domain N` | 多来源取样，每个域名最多 N 条 |
 | `bench --steps N --seeds N` | 预测基线 |
 | `viz` / `report` | 仪表盘 / 周报 |

@@ -34,6 +34,8 @@ from .collab import build_proposals, emergent_gap, record_choice
 from .knowledge import KnowledgeBase
 from .perm import Permissions
 from .store import SqliteStore
+from .transfer import format_report as format_transfer
+from .transfer import run as run_transfer
 from .loop import cycle as run_cycle, format_cycle
 from .selfmodel import SelfModel
 from .web import LiveFetcher, OfflineFetcher, fetch_many
@@ -677,6 +679,33 @@ def cmd_perms(args: argparse.Namespace, ctx: Context) -> int:
     return EXIT_OK
 
 
+# ---------------------------------------------------------------- transfer
+
+
+def cmd_transfer(args: argparse.Namespace, ctx: Context) -> int:
+    """跨任务迁移：在三个配置上训练，在没见过的两个配置上考。"""
+    _emit(f"训练配置 {len(__import__('lab.transfer', fromlist=['TRAIN_CONFIGS']).TRAIN_CONFIGS)} 个，"
+          f"留出配置 {len(__import__('lab.transfer', fromlist=['HELDOUT_CONFIGS']).HELDOUT_CONFIGS)} 个")
+    summary = run_transfer(
+        rounds=args.rounds,
+        episodes=args.episodes,
+        steps=args.steps,
+        eval_count=args.eval_count,
+    )
+    _emit(format_transfer(summary))
+    ctx.ledger.append(
+        "transfer",
+        {
+            "single_mean": summary["single"]["mean"],
+            "multi_mean": summary["multi"]["mean"],
+            "ratio": summary["ratio"],
+            "transfer_helped": summary["transfer_helped"],
+        },
+        ctx.clock.now_iso(),
+    )
+    return EXIT_OK
+
+
 # ---------------------------------------------------------------- autonomy / auto
 
 
@@ -1216,6 +1245,13 @@ def build_parser() -> argparse.ArgumentParser:
     p_bench.add_argument("--steps", type=int, default=200, help="每个 seed 跑多少步")
     p_bench.add_argument("--seeds", type=int, default=3, help="用几个 seed（1..N）")
     p_bench.set_defaults(func=cmd_bench)
+
+    p_transfer = sub.add_parser("transfer", help="跨任务迁移：多配置训练，留出配置评测")
+    p_transfer.add_argument("--rounds", type=int, default=4)
+    p_transfer.add_argument("--episodes", type=int, default=50)
+    p_transfer.add_argument("--steps", type=int, default=60)
+    p_transfer.add_argument("--eval-count", type=int, default=20)
+    p_transfer.set_defaults(func=cmd_transfer)
 
     p_autonomy = sub.add_parser("autonomy", help="自主级别：locked / supervised / full（一次性给到位）")
     p_autonomy.add_argument("--level", choices=["locked", "supervised", "full"], default=None)
