@@ -37,6 +37,7 @@ from lab.linear import (  # noqa: E402
     STATE_DIM_WITH_WALLS,
     LinearQAgent,
     MultiHeadLinearQAgent,
+    WeightedMultiHeadAgent,
     featurize,
 )
 from lab.tasks import (  # noqa: E402
@@ -434,6 +435,25 @@ class TransferTests(unittest.TestCase):
         train_keys = {(c["hazards"], c["lethal"]) for c in TRAIN_CONFIGS}
         heldout_keys = {(c["hazards"], c["lethal"]) for c in HELDOUT_CONFIGS}
         self.assertEqual(train_keys & heldout_keys, set())
+
+
+class WeightedHeadTests(unittest.TestCase):
+    """v0.15：按难度加权插值（判据达成的那一代）。"""
+
+    def test_weights_sum_to_one_and_blend_heads(self) -> None:
+        agent = WeightedMultiHeadAgent(seed=0)
+        agent.head("=U|2|2|0|h1")
+        agent.head("=U|2|2|0|h3")
+        weights = agent.weights_for("=U|2|2|0|h2")
+        self.assertAlmostEqual(sum(weights.values()), 1.0, places=6)
+        self.assertIn("h1", weights)
+        self.assertIn("h3", weights)
+
+    def test_weighted_transfer_reports_ratio(self) -> None:
+        summary = run_transfer(rounds=1, episodes=6, steps=20, eval_count=3, algo="weighted")
+        self.assertEqual(summary["algo"], "weighted")
+        self.assertIn("ratio", summary)
+        self.assertEqual(len(summary["multi"]["rows"]), len(HELDOUT_CONFIGS))
 
 
 class MultiHeadTests(unittest.TestCase):

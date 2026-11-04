@@ -1252,7 +1252,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_transfer.add_argument("--episodes", type=int, default=50)
     p_transfer.add_argument("--steps", type=int, default=60)
     p_transfer.add_argument("--eval-count", type=int, default=20)
-    p_transfer.add_argument("--algo", choices=["tabular", "linear", "multihead"], default="tabular")
+    p_transfer.add_argument("--algo", choices=["tabular", "linear", "multihead", "weighted"], default="tabular")
     p_transfer.set_defaults(func=cmd_transfer)
 
     p_autonomy = sub.add_parser("autonomy", help="自主级别：locked / supervised / full（一次性给到位）")

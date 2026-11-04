@@ -205,3 +205,48 @@ class MultiHeadLinearQAgent(LinearQAgent):
         }
         self.updates = int(payload.get("updates", 0))
         return self
+
+
+class WeightedMultiHeadAgent(MultiHeadLinearQAgent):
+    """按任务难度加权混合多个头（v0.15）。
+
+    实验 0006 里，多臂用"就近回退"，留出配置（h3）只能借 h2，太粗。这里改成：
+    按"危险区数量"到各头中心距离的倒数做权重，把多个头的输出混合起来，
+    并且更新时按同一权重分摊——相当于对"任务难度"做线性插值。
+    """
+
+    algo = "weighted"
+    CENTERS: Dict[str, float] = {"h0": 1.0, "h1": 4.0, "h2": 7.0, "h3": 10.0}
+
+    def weights_for(self, state: str) -> Dict[str, float]:
+        self.head(state)                      # 保证当前任务至少有一个头（会就近回退创建）
+        target = self.CENTERS.get(self.head_of(state), 7.0)
+        raw = {
+            key: 1.0 / (1.0 + abs(self.CENTERS.get(key, 7.0) - target))
+            for key in self.heads
+        }
+        total = sum(raw.values()) or 1.0
+        return {key: value / total for key, value in raw.items()}
+
+    def value(self, state: str) -> Dict[str, float]:
+        phi = featurize(state)
+        weights = self.weights_for(state)
+        blended = {action: 0.0 for action in ACTIONS}
+        for key, weight in weights.items():
+            head = self.heads[key]
+            for action in ACTIONS:
+                blended[action] += weight * sum(w * v for w, v in zip(head[action], phi))
+        return blended
+
+    def update(self, state: str, action: str, reward: float, next_state: str) -> None:
+        phi = featurize(state)
+        target = reward + 0.95 * max(self.value(next_state).values())
+        for key, weight in self.weights_for(state).items():
+            head = self.heads[key]
+            error = target - sum(w * v for w, v in zip(head[action], phi))
+            alpha = 0.05 * weight / math.sqrt(1.0 + self.updates / 500.0)
+            weights = head[action]
+            for index, feature in enumerate(phi):
+                if feature:
+                    weights[index] += alpha * error * feature
+        self.updates += 1

@@ -127,7 +127,7 @@ python -m lab.cli verify                            # 账本/状态机/知识库
 | `lab/collab.py` | 协作提案 + 涌现代理指标 | `collaborate` / `emergent` | ✅ |
 | `lab/store.py` | SQLite 持久层（索引/热备份，可迁云数据库） | `db sync/stats/backup` | ✅ |
 | `lab/perm.py` | 权限申请/批准 + **自主级别（locked/supervised/full）** | `ask` / `grant` / `deny` / `perms` / `autonomy` | ✅ |
-| `lab/transfer.py` | 跨任务迁移实验（多配置训练 / 留出配置评测） | `transfer [--algo tabular\|linear\|multihead]` | 🟡 多臂把比值拉到 0.99（判据 1.05），新配置上强于 BFS |
+| `lab/transfer.py` | 跨任务迁移实验（多配置训练 / 留出配置评测） | `transfer [--algo tabular\|linear\|multihead\|weighted]` | ✅ 加权插值达 1.15（实验 0007） |
 | `lab/plugins/` | 插件接口（manifest + 红线 + 预算声明） | — | ⬜ 下一版 |
 | `lab/loop.py` | 自驱循环（不需逐条敲命令） | `loop` | ⬜ v0.3 下一步 |
 
