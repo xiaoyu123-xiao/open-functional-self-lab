@@ -28,7 +28,15 @@ from lab.selfmodel import SelfModel  # noqa: E402
 from lab.knowledge import KnowledgeBase  # noqa: E402
 from lab.agent import QLearningAgent  # noqa: E402
 from lab.linear import STATE_DIM, STATE_DIM_WITH_WALLS, LinearQAgent, featurize  # noqa: E402
-from lab.tasks import assert_disjoint, baseline_score, eval_seeds, evaluate, train, train_seeds  # noqa: E402
+from lab.tasks import (  # noqa: E402
+    assert_disjoint,
+    baseline_score,
+    eval_seeds,
+    evaluate,
+    run_episode,
+    train,
+    train_seeds,
+)
 from lab.loop import cycle  # noqa: E402
 from lab.web import LiveFetcher, NotAllowed, OfflineFetcher, check_url, is_allowed  # noqa: E402
 from lab.predict import Linear, Persistence, benchmark, error, sparkline  # noqa: E402
@@ -356,6 +364,40 @@ class PredictTests(unittest.TestCase):
         self.assertEqual(len(sparkline([0.1, 0.2, 0.3])), 3)
         self.assertEqual(len(sparkline(list(range(200)), width=20)), 20)
         self.assertEqual(sparkline([]), "")
+
+
+class LethalTaskTests(unittest.TestCase):
+    """v0.7：致命危险区——让手写 BFS 不再是优解（M1' 的落点）。"""
+
+    def test_two_hits_kill(self) -> None:
+        env = GridWorld(5, lethal=True)
+        env.agent = sorted(env.hazards)[0]
+        env.step("rest")
+        self.assertFalse(env.dead)
+        env.step("rest")
+        self.assertTrue(env.dead)
+        self.assertEqual(env.energy, 0.0)
+
+    def test_bfs_suffers_when_lethal(self) -> None:
+        seeds = eval_seeds(10)
+        safe = baseline_score(seeds, 60)["mean_return"]
+        lethal = baseline_score(seeds, 60, lethal=True)["mean_return"]
+        self.assertLess(lethal, safe, msg=f"非致命 {safe} 致命 {lethal}")
+
+    def test_learner_beats_baseline_when_lethal(self) -> None:
+        agent = QLearningAgent(seed=0)
+        seeds = eval_seeds(8)
+        for _ in range(3):
+            train(agent, train_seeds(40), 60, epsilon=0.25, lethal=True)
+        learned = evaluate(agent, seeds, 60, lethal=True)["mean_return"]
+        baseline = baseline_score(seeds, 60, lethal=True)["mean_return"]
+        self.assertGreaterEqual(learned, baseline * 1.05, msg=f"学习器 {learned} 基线 {baseline}")
+
+    def test_episode_stops_at_death(self) -> None:
+        agent = QLearningAgent(seed=0)
+        result = run_episode(agent, 9001, 60, train=False, lethal=True)
+        self.assertIn("dead", result)
+        self.assertLessEqual(result["steps"], 60)
 
 
 class LinearAgentTests(unittest.TestCase):

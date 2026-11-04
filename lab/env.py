@@ -37,6 +37,7 @@ class GridWorld:
         walls: int = WALL_COUNT,
         food: int = FOOD_COUNT,
         hazards: int = HAZARD_COUNT,
+        lethal: bool = False,
     ) -> None:
         rng = random.Random(seed)
         cells = [(x, y) for x in range(SIZE) for y in range(SIZE)]
@@ -46,6 +47,10 @@ class GridWorld:
         self.steps = 0
         self.energy = ENERGY_MAX
         self.damage = 0.0
+        self.lethal = bool(lethal)
+        self.dead = False
+        # 致命模式下中毒两次即死（每次 0.5）；非致命模式仍是一次 0.25
+        self.hazard_damage = 0.5 if self.lethal else HAZARD_DAMAGE
 
         reserved = {self.agent}
         def take(count: int) -> List[Tuple[int, int]]:
@@ -73,7 +78,7 @@ class GridWorld:
             "energy": round(self.energy, 4),
             "damage": round(self.damage, 4),
             "food_left": float(len(self.food)),
-            "alive": 1.0 if self.energy > 0 else 0.0,
+            "alive": 0.0 if self.dead or self.energy <= 0 else 1.0,
         }
 
     def homeostatic_error(self) -> float:
@@ -114,10 +119,13 @@ class GridWorld:
 
         hurt = False
         if self.agent in self.hazards:
-            self.damage = min(DAMAGE_MAX, self.damage + HAZARD_DAMAGE)
+            self.damage = min(DAMAGE_MAX, self.damage + self.hazard_damage)
             hurt = True
 
         self.energy = max(0.0, self.energy - ENERGY_COST_PER_STEP)
+        if self.lethal and self.damage >= DAMAGE_MAX:
+            self.dead = True
+            self.energy = 0.0
         self.steps += 1
 
         return {

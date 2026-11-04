@@ -1,0 +1,5 @@
+﻿# 可选：只在需要神经网络策略（v0.8+）时安装。核心功能不需要这些。
+# CUDA 版请按 https://pytorch.org 给出的 index-url 安装，例如：
+#   pip install torch --index-url https://download.pytorch.org/whl/cu124
+torch>=2.4
+numpy>=1.26

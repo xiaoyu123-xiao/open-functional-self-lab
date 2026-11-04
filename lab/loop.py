@@ -33,6 +33,7 @@ def cycle(
     epsilon: float = 0.25,
     hazards: int = 4,
     algo: str = "tabular",
+    lethal: bool = False,
 ) -> Dict[str, Any]:
     if rounds <= 0 or episodes_per_round <= 0 or steps <= 0 or eval_count <= 0:
         raise ValueError("rounds / episodes_per_round / steps / eval_count 都必须是正整数")
@@ -42,12 +43,12 @@ def cycle(
     agent = make_agent(policy_path).load()
     evaluation = eval_seeds(eval_count)
 
-    before = evaluate(agent, evaluation, steps, hazards=hazards)
+    before = evaluate(agent, evaluation, steps, hazards=hazards, lethal=lethal)
     train_stats: List[Dict[str, Any]] = []
     for _ in range(rounds):
-        train_stats.append(train(agent, train_seeds(episodes_per_round), steps, epsilon=epsilon, hazards=hazards))
-    after = evaluate(agent, evaluation, steps, hazards=hazards)
-    baseline = baseline_score(evaluation, steps, hazards=hazards)
+        train_stats.append(train(agent, train_seeds(episodes_per_round), steps, epsilon=epsilon, hazards=hazards, lethal=lethal))
+    after = evaluate(agent, evaluation, steps, hazards=hazards, lethal=lethal)
+    baseline = baseline_score(evaluation, steps, hazards=hazards, lethal=lethal)
 
     improved = after["mean_return"] > before["mean_return"]
     if improved:
@@ -71,7 +72,10 @@ def cycle(
             "states": len(agent.table),
             "hazards": hazards,
         "algo": algo,
+        "lethal": lethal,
             "algo": algo,
+        "lethal": lethal,
+            "lethal": lethal,
         },
         ts,
     )
@@ -85,6 +89,7 @@ def cycle(
         "record_seq": record["seq"],
         "hazards": hazards,
         "algo": algo,
+        "lethal": lethal,
     }
 
 
@@ -97,7 +102,7 @@ def format_cycle(result: Dict[str, Any]) -> str:
         f"训练后留出分数：{result['after']['mean_return']:+.3f}"
         f"（吃到 {result['after']['ate']}，受伤 {result['after']['hurt']}）",
         f"变化 {result['delta']:+.3f} → {verdict}",
-        f"BFS 基线 {result['baseline']['mean_return']:+.3f}，"
+        ("致命危险区　" if result["lethal"] else "") + f"BFS 基线 {result["baseline"]["mean_return"]:+.3f}，"
         f"当前策略与之差 {gap:+.3f}（负数表示还没追上）",
         f"难度（危险区数量）{result['hazards']}，Q 表状态数 {result['states']}，账本记录 #{result['record_seq']}",
     ]

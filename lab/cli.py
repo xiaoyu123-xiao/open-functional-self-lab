@@ -618,7 +618,7 @@ def cmd_train(args: argparse.Namespace, ctx: Context) -> int:
 
     make_agent = LinearQAgent if args.algo == "linear" else QLearningAgent
     agent = make_agent(ctx.state_dir / "policy.json").load()
-    stats = do_train(agent, train_seeds(args.episodes), args.steps, epsilon=args.epsilon)
+    stats = do_train(agent, train_seeds(args.episodes), args.steps, epsilon=args.epsilon, lethal=args.lethal)
     agent.save()
     ctx.ledger.append("train", {**stats, "states": len(agent.table)}, ctx.clock.now_iso())
     _emit(f"训练 {stats['episodes']} 个回合：训练集均分 {stats['mean_return']:+.3f}，"
@@ -635,8 +635,8 @@ def cmd_eval(args: argparse.Namespace, ctx: Context) -> int:
     make_agent = LinearQAgent if args.algo == "linear" else QLearningAgent
     agent = make_agent(ctx.state_dir / "policy.json").load()
     seeds = eval_seeds(args.count)
-    learned = evaluate(agent, seeds, args.steps)
-    baseline = baseline_score(seeds, args.steps)
+    learned = evaluate(agent, seeds, args.steps, lethal=args.lethal)
+    baseline = baseline_score(seeds, args.steps, lethal=args.lethal)
     _emit(f"算法：{args.algo}　留出集（seed {seeds[0]}–{seeds[-1]}，{args.steps} 步 × {args.count} 个）：")
     _emit(f"  学到的策略 {learned['mean_return']:+.3f}（吃到 {learned['ate']}，受伤 {learned['hurt']}）")
     _emit(f"  BFS 基线   {baseline['mean_return']:+.3f}（吃到 {baseline['ate']}，受伤 {baseline['hurt']}）")
@@ -673,6 +673,7 @@ def cmd_loop(args: argparse.Namespace, ctx: Context) -> int:
             eval_count=args.eval_count,
             hazards=hazards,
             algo=args.algo,
+            lethal=args.lethal,
         )
         _emit(f"—— 第 {index}/{args.cycles} 轮 ——")
         _emit(format_cycle(result))
@@ -958,6 +959,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_train.add_argument("--episodes", type=int, default=40)
     p_train.add_argument("--steps", type=int, default=60)
     p_train.add_argument("--algo", choices=["tabular", "linear"], default="tabular")
+    p_train.add_argument("--lethal", action="store_true", help="危险区致命（中毒两次即死）")
     p_train.add_argument("--epsilon", type=float, default=0.25)
     p_train.set_defaults(func=cmd_train)
 
@@ -965,6 +967,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_eval.add_argument("--count", type=int, default=20)
     p_eval.add_argument("--steps", type=int, default=60)
     p_eval.add_argument("--algo", choices=["tabular", "linear"], default="tabular")
+    p_eval.add_argument("--lethal", action="store_true", help="危险区致命（中毒两次即死）")
     p_eval.set_defaults(func=cmd_eval)
 
     p_loop = sub.add_parser("loop", help="自驱循环：评测→训练→再评测→变差就回滚")
@@ -973,6 +976,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_loop.add_argument("--episodes", type=int, default=30)
     p_loop.add_argument("--steps", type=int, default=60)
     p_loop.add_argument("--algo", choices=["tabular", "linear"], default="tabular")
+    p_loop.add_argument("--lethal", action="store_true", help="危险区致命（中毒两次即死）")
     p_loop.add_argument("--eval-count", type=int, default=20)
     p_loop.add_argument("--no-curriculum", action="store_true", help="固定难度，不自动加难")
     p_loop.set_defaults(func=cmd_loop)

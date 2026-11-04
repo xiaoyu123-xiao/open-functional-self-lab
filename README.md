@@ -51,12 +51,14 @@ Windows / macOS / Linux 命令相同。想完全复现某次运行：加 `--fake
 | 红线扫描（CI 每次跑） | `lab/policy.py` · `SECURITY.md` |
 | 仪表盘 / 周报自动生成 | `lab/viz.py` · `lab/report.py` |
 | 预测基线对比（random / persistence / linear） | `lab/predict.py` · `lab bench` |
+| 可学策略（表格 / 线性）+ 训练留出分离 | `lab/agent.py` · `lab/linear.py` · `lab loop` |
+| 在有算力的机器上跑 | `deploy/README.md`（Docker / tmux / GPU 可选） |
 | 通知：分级 / 24h 去重 / `ack` 回应 / 回应率 | `lab/notify.py` · `lab notify` · `lab inbox` |
 | **自我模型**：身份锚点 / 能力自评 / 失败模式 / 目标 | `lab/selfmodel.py` · `lab self` |
 | **取样入库**：白名单 → 声明 → 独立性 → 复审 | `lab/web.py` · `lab/knowledge.py` · `lab learn` |
 | 紧急冻结开关 | `lab freeze` / `lab unfreeze --by <你>` |
 
-**已验证**：10 项自检全过 · 77 个 unittest · CI 覆盖 Python 3.10–3.13 · 干净 clone 复验通过。
+**已验证**：10 项自检全过 · 86 个 unittest · CI 覆盖 Python 3.10–3.13 · 干净 clone 复验通过。
 
 ## 参与
 

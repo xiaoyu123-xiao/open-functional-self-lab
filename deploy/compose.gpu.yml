@@ -1,0 +1,19 @@
+﻿services:
+  lab:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    working_dir: /workspace
+    volumes:
+      - ../state:/workspace/state
+    environment:
+      - PYTHONUNBUFFERED=1
+    command: ["python", "-m", "lab.cli", "doctor"]
+    # GPU 用不到就删掉下面这段；v0.8 的神经策略才需要
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
