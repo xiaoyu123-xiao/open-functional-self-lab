@@ -85,7 +85,17 @@ class GridWorld:
                 reserved.add(cell)
             return picked
 
-        if self.layout == "corridor":
+        if self.layout == "rooms":
+            # 房间式（v0.50）：一横一竖两面墙，每面留两个门，保证可通行
+            self.walls = set()
+            line = max(2, self.size // 2)
+            doors = {rng.randrange(1, self.size - 1), rng.randrange(1, self.size - 1)}
+            for k in range(self.size):
+                if k not in doors:
+                    self.walls.add((line, k))
+                    self.walls.add((k, line))
+            reserved |= self.walls
+        elif self.layout == "corridor":
             # 走廊式（v0.25 改为稀疏隔断）：奇数行是隔断，每行留 2 个缺口 → 需要绕行但不至于走不通
             gap_pool = list(range(1, self.size - 1))
             self.walls = set()
