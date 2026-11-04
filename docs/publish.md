@@ -57,6 +57,33 @@ git commit -m "feat: v0.1.0 控制面（时钟/账本/状态机/预算/红线/�
 
 ---
 
+## 1.5 把占位符换成你的仓库地址（推送之前做）
+
+README / CONTRIBUTING / CITATION / CODEOWNERS / Issue 模板里共 13 处写着 `your-org`。
+**CODEOWNERS 里留占位符等于分支保护不生效**，所以这一步不能省：
+
+```bash
+python scripts/set_owner.py --owner <你的GitHub用户名>
+```
+
+想顺便把 commit 作者改成你本人（仓库还没 push 时才可以）：
+
+```bash
+python scripts/set_owner.py --owner <用户名> --name "你的名字" --email "you@example.com"
+# 它会提示重新打 tag：git tag -d v0.1.0 && git tag -a v0.1.0 -m "v0.1.0 控制面 MVP"
+```
+
+然后：
+
+```bash
+git add -A
+git commit -m "chore: 替换占位符为真实仓库地址"
+```
+
+`[本机已验证]`（在干净 clone 里跑过：13 处全部替换、无残留、`doctor` 与 27 个测试仍全绿）
+
+---
+
 ## 2. 建远端仓库
 
 ### 方式 A：网页（不需要装任何东西）
