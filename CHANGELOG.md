@@ -6,9 +6,29 @@
 ## [Unreleased]
 
 ### 计划
-- Issue 0019：通知分级、`/ack`、防疲劳、回应率统计
 - Issue 0014：decay / TTL / 调度器（含 DST 规则）
 - Issue 0008：实验闭环（更复杂的任务，才看得出预测器的真实差距）
+- Issue 0019 的后半部分：GitHub Issue / webhook 渠道（需要联网，单独审批）
+
+## [0.1.3] - 2026-11-04
+
+把"有事要提示本人"做成会记录、会去重、会自我诊断的机制。
+
+### Added
+- `lab/notify.py`：`Notifier` —— 分级（高/中/低）、24 小时去重（同一 `kind + dedupe_key`）、
+  `ack()` 回应写账本、回应率统计、回应率过低时自动追加 `notify-health` 提醒
+- 三个命令：`lab notify --kind ... --message ...`、`lab ack <编号> --action ...`、`lab inbox`
+- 渠道：终端即时打印 + 账本 `alert` 事件 + `state/notify.jsonl`（每行一条，便于 grep）
+- `lab run` 的预算拦截、`lab freeze` 现在都走 Notifier（前者 24h 去重，后者每次都响）
+- 8 个新测试：去重/过期、`ack` 后回应率、样本太小不下结论、非法级别与动作、CLI 端到端
+
+### Changed
+- `issues/0019` 标记为已完成；`notify/README.md` 状态从"待实现"改为已实现
+- 仪表盘的"已回应"改为**只统计回应了真实存在的告警**（原来把 `ack` 记录数当回应数，会刷虚）
+- 测试数 41 → 49
+
+### Notes
+- 刻意**不联网**：webhook / GitHub Issue 渠道留到以后，保持"默认离线"这条承诺
 
 ## [0.1.2] - 2026-11-04
 

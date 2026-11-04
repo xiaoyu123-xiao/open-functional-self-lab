@@ -204,7 +204,7 @@
     {
       "id": "0019",
       "title": "通知：分级触发 + /ack + 防疲劳 + 回应率",
-      "status": "todo",
+      "status": "done",
       "labels": ["task", "notify"],
       "goal": "v0.1 只有账本 alert 事件；需要把分级、去重、ack、回应率统计落地。",
       "acceptance": "高危 5 分钟内可见；24 小时去重；/ack 写入账本；回应率 <50% 触发复审提示。",

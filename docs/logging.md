@@ -28,7 +28,7 @@
 | `transition` | 状态变化 | from, to, actor, reason |
 | `checkpoint` | run 结束 | run_id, path, ledger_hash |
 | `alert` | 异常 | level, kind, detail |
-| `ack` | 人回应告警 | event_id, action |
+| `ack` | 人回应告警 | target_seq, action, by, note |
 
 新增事件类型要在 PR 里更新本表——否则 `report` 的统计会漏。
 

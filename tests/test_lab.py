@@ -23,6 +23,7 @@ from lab.cli import _episode_records  # noqa: F401  私有函数，测试里用�
 from lab.cli import main as cli_main  # noqa: E402
 from lab.clock import Clock, FakeClock, elapsed_seconds, parse_iso, to_iso  # noqa: E402
 from lab.env import GridWorld, greedy_action  # noqa: E402
+from lab.notify import Notifier  # noqa: E402
 from lab.predict import Linear, Persistence, benchmark, error, sparkline  # noqa: E402
 from lab.ledger import Ledger  # noqa: E402
 from lab.policy import scan, scan_text, summarize  # noqa: E402
@@ -348,6 +349,90 @@ class PredictTests(unittest.TestCase):
         self.assertEqual(len(sparkline([0.1, 0.2, 0.3])), 3)
         self.assertEqual(len(sparkline(list(range(200)), width=20)), 20)
         self.assertEqual(sparkline([]), "")
+
+
+class NotifyTests(unittest.TestCase):
+    """Issue 0019：通知分级 / 去重 / 回应 / 回应率。"""
+
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+        self.state = self.root / "state"
+        self.ledger = Ledger(self.state / "ledger.jsonl")
+        self.clock = FakeClock("2026-01-01T00:00:00Z")
+        self.notifier = Notifier(self.ledger, self.clock, self.state, echo=False)
+
+    def tearDown(self) -> None:
+        self.tmp.cleanup()
+
+    def test_emit_appends_ledger_and_channel_file(self) -> None:
+        record = self.notifier.emit("high", "budget", "超限了")
+        self.assertIsNotNone(record)
+        self.assertEqual(len(self.notifier._alerts()), 1)
+        lines = (self.state / "notify.jsonl").read_text(encoding="utf-8").strip().splitlines()
+        self.assertEqual(len(lines), 1)
+        self.assertIn("超限了", lines[0])
+
+    def test_dedupe_within_24h(self) -> None:
+        first = self.notifier.emit("high", "budget", "第一次", dedupe_key="budget")
+        second = self.notifier.emit("high", "budget", "第二次", dedupe_key="budget")
+        self.assertIsNotNone(first)
+        self.assertIsNone(second)
+        self.assertEqual(len(self.notifier._alerts()), 1)
+
+    def test_dedupe_expires_after_24h(self) -> None:
+        self.notifier.emit("high", "drift", "第一次", dedupe_key="drift")
+        self.clock.advance(25 * 3600)
+        again = self.notifier.emit("high", "drift", "第二天", dedupe_key="drift")
+        self.assertIsNotNone(again)
+        self.assertEqual(len(self.notifier._alerts()), 2)
+
+    def test_no_dedupe_key_means_always_send(self) -> None:
+        self.notifier.emit("high", "freeze", "冻一次")
+        self.notifier.emit("high", "freeze", "再冻一次")
+        self.assertEqual(len(self.notifier._alerts()), 2)
+
+    def test_ack_clears_pending_and_fixes_rate(self) -> None:
+        record = self.notifier.emit("high", "budget", "超限", dedupe_key="b")
+        self.assertEqual(len(self.notifier.pending()), 1)
+        self.notifier.ack(int(record["seq"]), "freeze", by="tester")
+        self.assertEqual(self.notifier.pending(), [])
+        self.assertEqual(self.notifier.response_rate(), 1.0)
+
+    def test_rate_below_threshold_emits_health_alert(self) -> None:
+        # 少于 MIN_SAMPLE 条时不下结论
+        self.notifier.emit("high", "drift", "只有一条", dedupe_key="solo")
+        self.assertIsNone(self.notifier.check_health())
+        for index in range(3):
+            self.notifier.emit("high", "drift", f"第{index}条", dedupe_key=str(index))
+        self.assertEqual(self.notifier.response_rate(), 0.0)
+        health = self.notifier.check_health()
+        self.assertIsNotNone(health)
+        self.assertEqual(health["payload"]["kind"], "notify-health")
+        # 同一天再查一次不应重复刷屏
+        self.assertIsNone(self.notifier.check_health())
+
+    def test_invalid_level_and_action_rejected(self) -> None:
+        with self.assertRaises(ValueError):
+            self.notifier.emit("urgent", "x", "y")
+        record = self.notifier.emit("low", "x", "y")
+        with self.assertRaises(ValueError):
+            self.notifier.ack(int(record["seq"]), "explode")
+        with self.assertRaises(KeyError):
+            self.notifier.ack(99999, "pause")
+
+    def test_cli_notify_ack_inbox(self) -> None:
+        root = self.root
+        args = ["--root", str(root), "--fake-now", "2026-01-01T00:00:00Z"]
+        self.assertEqual(cli_main([*args, "init"]), 0)
+        self.assertEqual(cli_main([*args, "notify", "--kind", "budget", "--message", "测试", "--dedupe-key", "k"]), 0)
+        self.assertEqual(cli_main([*args, "notify", "--kind", "budget", "--message", "重复", "--dedupe-key", "k"]), 0)
+        text = (root / "state" / "notify.jsonl").read_text(encoding="utf-8")
+        self.assertEqual(len(text.strip().splitlines()), 1)
+        seq = int(text.strip().splitlines()[0].split('"seq": ')[1].split(",")[0])
+        self.assertEqual(cli_main([*args, "ack", str(seq), "--action", "pause"]), 0)
+        self.assertEqual(cli_main([*args, "inbox"]), 0)
+        self.assertEqual(cli_main([*args, "ack", "99999", "--action", "pause"]), 2)
 
 
 class SubprocessSmokeTests(unittest.TestCase):

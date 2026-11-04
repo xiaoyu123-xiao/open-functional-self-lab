@@ -56,7 +56,14 @@ def render(store: StateStore, ledger: Ledger, budget: Budget, generated_at: str)
     history: List[Dict[str, Any]] = data.get("history", [])
     rollbacks = sum(1 for step in history if step.get("to") == "ROLLING_BACK")
     alerts = [r for r in records if r.get("event") == "alert"]
-    acked = sum(1 for r in records if r.get("event") == "ack")
+    # 只统计"回应了真实存在的告警"的次数，避免 ack 记录把数字刷虚
+    alert_seqs = {int(r["seq"]) for r in alerts if "seq" in r}
+    ack_targets = {
+        int(r.get("payload", {}).get("target_seq", -1))
+        for r in records
+        if r.get("event") == "ack"
+    }
+    acked = len(alert_seqs & ack_targets)
 
     out: List[str] = []
     out.append("# 实验台仪表盘")

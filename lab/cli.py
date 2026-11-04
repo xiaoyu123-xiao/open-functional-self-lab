@@ -27,6 +27,7 @@ from .budget import DEFAULT_CAPS, Budget, BudgetExceeded
 from .env import GridWorld, greedy_action, persistence_error
 from .clock import Clock, FakeClock, parse_iso, to_iso
 from .ledger import Ledger
+from .notify import DEDUPE_HOURS, LEVELS, Notifier
 from .predict import benchmark as run_benchmark
 from .predict import render_report as render_bench
 from .report import render as render_report
@@ -90,6 +91,9 @@ class Context:
                 else:
                     merged[key] = value
         return merged
+
+    def notifier(self, echo: bool = True) -> Notifier:
+        return Notifier(self.ledger, self.clock, self.state_dir, echo=echo)
 
     def budget(self, run_id: "str | None" = None) -> Budget:
         return Budget(self.config()["budget"], self.ledger, self.clock.now_iso(), run_id)
@@ -364,7 +368,7 @@ def cmd_run(args: argparse.Namespace, ctx: Context) -> int:
             last_record = record
     except BudgetExceeded as error:
         _emit(f"预算闸门拦截：{error}")
-        ctx.ledger.append("alert", {"level": "high", "kind": "budget", "detail": str(error)}, ctx.clock.now_iso())
+        ctx.notifier().emit("high", "budget", str(error), dedupe_key="budget", needs_action=True)
         ctx.store.transition("ROLLING_BACK", ts=ctx.clock.now_iso(), actor="system", reason="预算超限")
         ctx.ledger.append("transition", ctx.store.load()["history"][-1], ctx.clock.now_iso())
         ctx.store.transition("READY", ts=ctx.clock.now_iso(), actor="system", reason="回滚完成")
@@ -519,6 +523,49 @@ def cmd_bench(args: argparse.Namespace, ctx: Context) -> int:
     return EXIT_OK
 
 
+# ---------------------------------------------------------------- notify / ack / inbox
+
+
+def cmd_notify(args: argparse.Namespace, ctx: Context) -> int:
+    notifier = ctx.notifier()
+    record = notifier.emit(
+        args.level,
+        args.kind,
+        args.message,
+        dedupe_key=args.dedupe_key or "",
+        needs_action=not args.no_action,
+    )
+    if record is None:
+        _emit(f"已去重：{args.kind} 在 {DEDUPE_HOURS} 小时内发过同类通知，未重复发送")
+        return EXIT_OK
+    _emit(f"已发送 #{record['seq']}（写进账本与 state/notify.jsonl）")
+    health = notifier.check_health()
+    if health is not None:
+        _emit(f"提醒：告警回应率偏低，已追加 #{health['seq']}")
+    return EXIT_OK
+
+
+def cmd_ack(args: argparse.Namespace, ctx: Context) -> int:
+    notifier = ctx.notifier()
+    try:
+        notifier.ack(int(args.seq), args.action, by=args.by, note=args.note or "")
+    except (KeyError, ValueError) as error:
+        _emit(f"回应失败：{error}")
+        return EXIT_USAGE
+    _emit(f"当前未回应告警：{len(notifier.pending())} 条")
+    return EXIT_OK
+
+
+def cmd_inbox(args: argparse.Namespace, ctx: Context) -> int:
+    notifier = ctx.notifier(echo=False)
+    _emit(notifier.digest().rstrip())
+    health = notifier.check_health()
+    if health is not None:
+        _emit("")
+        _emit(f"已追加健康提醒 #{health['seq']}（回应率低于阈值）")
+    return EXIT_OK
+
+
 # ---------------------------------------------------------------- status / freeze
 
 
@@ -543,7 +590,7 @@ def cmd_freeze(args: argparse.Namespace, ctx: Context) -> int:
         _emit(f"无法冻结：{error}")
         return EXIT_FAIL
     ctx.ledger.append("transition", record, ctx.clock.now_iso(), actor="human")
-    ctx.ledger.append("alert", {"level": "high", "kind": "freeze", "detail": args.reason or "人工冻结"}, ctx.clock.now_iso(), actor="human")
+    ctx.notifier().emit("high", "freeze", args.reason or "人工冻结", needs_action=True)
     _emit("已冻结。解冻：python -m lab.cli unfreeze --by <你的名字>")
     return EXIT_OK
 
@@ -605,6 +652,24 @@ def build_parser() -> argparse.ArgumentParser:
     p_bench.add_argument("--steps", type=int, default=200, help="每个 seed 跑多少步")
     p_bench.add_argument("--seeds", type=int, default=3, help="用几个 seed（1..N）")
     p_bench.set_defaults(func=cmd_bench)
+
+    p_notify = sub.add_parser("notify", help="发一条通知（终端 + 账本 + state/notify.jsonl）")
+    p_notify.add_argument("--level", choices=list(LEVELS), default="high")
+    p_notify.add_argument("--kind", required=True, help="类型，如 budget / freeze / drift")
+    p_notify.add_argument("--message", required=True)
+    p_notify.add_argument("--dedupe-key", default="", help="同一 key 24 小时内只发一次")
+    p_notify.add_argument("--no-action", action="store_true", help="标记为无需人工回应")
+    p_notify.set_defaults(func=cmd_notify)
+
+    p_ack = sub.add_parser("ack", help="回应一条告警")
+    p_ack.add_argument("seq", help="告警编号（终端里显示的 #N）")
+    p_ack.add_argument("--action", default="pause", choices=["pause", "rollback", "freeze", "continue", "unfreeze", "ignore"])
+    p_ack.add_argument("--by", default="human")
+    p_ack.add_argument("--note", default="")
+    p_ack.set_defaults(func=cmd_ack)
+
+    p_inbox = sub.add_parser("inbox", help="看待回应的告警与回应率")
+    p_inbox.set_defaults(func=cmd_inbox)
 
     p_status = sub.add_parser("status", help="打印当前状态")
     p_status.set_defaults(func=cmd_status)
