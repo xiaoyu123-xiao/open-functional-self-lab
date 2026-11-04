@@ -5,14 +5,23 @@
 
 ## 1. 四类上限
 
-| 类别 | 默认 | 窗口 | 计量点 |
-|---|---|---|---|
-| `steps_per_run` | 1000 | 每次 run | 每步 +1 |
-| `wall_clock_hours_per_run` | 2 | 每次 run | 每步 +0.01（占位） |
-| `search_requests_per_day` | 200 | UTC 日 | 每次检索请求 +1 |
-| `gpu_hours_per_month` | 10 | UTC 月 | 训练/推理 +实际小时 |
+**数值的唯一来源是 `lab.config.json`。** 本文只写语义（类别 / 窗口 / 计量点），不重复数字——
+数字写在两处，改一处就会不一致，这是最典型也最难查的漂移。
 
-窗口口径写死在代码里（`WINDOWS` 字典），不接受运行时传入，避免"临时改窗口"这种操作。
+想知道当前生效值：
+
+```bash
+python -m lab.cli status      # 打印每类的 used / cap
+```
+
+| 类别 | 窗口 | 计量点 |
+|---|---|---|
+| `steps_per_run` | 每次 run | 每步 +1 |
+| `wall_clock_hours_per_run` | 每次 run | 每步 +0.01（占位） |
+| `search_requests_per_day` | UTC 日 | 每次检索请求 +1 |
+| `gpu_hours_per_month` | UTC 月 | 训练/推理 +实际小时 |
+
+窗口口径写死在代码里（`lab/budget.py` 的 `WINDOWS` 字典），不接受运行时传入，避免"临时改窗口"这种操作。
 
 ## 2. 超限时会发生什么（不许"警告后继续"）
 

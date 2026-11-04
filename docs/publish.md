@@ -11,6 +11,15 @@
 ## 0. 发布前：这条命令必须全绿
 
 ```bash
+python scripts/preflight.py
+```
+
+它会依次跑：`doctor` → 27 个单元测试 → `lint`（红线）→ 预算闸门回归 → `verify`（账本/状态机），
+任何一项失败都会指出是哪一步。`[本机已验证]`
+
+想分开跑、看清楚每一步：
+
+```bash
 cd open-functional-self-lab
 python -m lab.cli doctor
 python -m unittest discover -s tests -q    # 期望末行 OK
@@ -108,14 +117,20 @@ gh repo create open-functional-self-lab --public --source=. --remote=origin --pu
 
 ```bash
 git branch -M main
-git remote add origin https://github.com/<你>/open-functional-self-lab.git
+git remote add origin https://github.com/xiaoyu123-xiao/open-functional-self-lab.git
 git push -u origin main
+git push origin v0.1.0
 ```
 
-`[本机已验证]`（本地已完成 `git init` → `commit` → `tag`，只差 remote 与 push）
+本仓库的 remote 已经配好（`git remote -v` 可确认），所以实际只需要后两行。
+Windows 上也可以直接跑 `scripts\publish.ps1`：它会先预检、检查工作区是否干净，再依次推 main 和 tag。
 
-认证：HTTPS 要用 **Personal Access Token** 当密码（GitHub 早已不支持账号密码）；
-或者装 GitHub CLI 后 `gh auth setup-git` 一次性搞定。
+`[本机已验证]`（本地已完成 `git init` → 4 个 commit → `tag v0.1.0` → `remote add`，只差 push）
+
+认证：这台机器装了 Git Credential Manager，第一次 push 会弹浏览器登录，登录完就不用再管。
+若改用 **Personal Access Token** 当密码，注意本仓库含 `.github/workflows/ci.yml`，
+token 必须同时具备 **`repo` + `workflow`** 两个 scope，否则会被拒：
+`refusing to allow a Personal Access Token to create or update workflow`。
 
 ---
 
