@@ -21,6 +21,7 @@ from __future__ import annotations
 from typing import Any, Dict, Iterable, List, Sequence, Tuple
 
 from .agent import QLearningAgent
+from .linear import LinearQAgent
 from .tasks import baseline_score, eval_seeds, evaluate, train, train_seeds
 
 TRAIN_CONFIGS: Tuple[Dict[str, Any], ...] = (
@@ -79,14 +80,16 @@ def run(
     episodes: int = 50,
     steps: int = 60,
     eval_count: int = 20,
+    algo: str = "tabular",
 ) -> Dict[str, Any]:
     seeds = eval_seeds(eval_count)
+    make_agent = (lambda: LinearQAgent(seed=11)) if algo == "linear" else (lambda: QLearningAgent(seed=11))
 
-    single = QLearningAgent(seed=11)
+    single = make_agent()
     single_episodes = train_multi(single, [TRAIN_CONFIGS[0]], rounds, episodes, steps)
     single_rows = evaluate_configs(single, HELDOUT_CONFIGS, seeds, steps)
 
-    multi = QLearningAgent(seed=11)
+    multi = make_agent()
     multi_episodes = train_multi(multi, TRAIN_CONFIGS, rounds, episodes, steps)
     multi_rows = evaluate_configs(multi, HELDOUT_CONFIGS, seeds, steps)
 
@@ -95,6 +98,7 @@ def run(
     ratio = (multi_mean / single_mean) if abs(single_mean) > 1e-9 else float("inf")
 
     return {
+        "algo": algo,
         "seeds": list(seeds),
         "steps": steps,
         "single": {"episodes": single_episodes, "rows": single_rows, "mean": round(single_mean, 4)},

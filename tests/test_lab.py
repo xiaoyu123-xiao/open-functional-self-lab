@@ -419,6 +419,11 @@ class TransferTests(unittest.TestCase):
         if summary["ratio"] is not None:
             self.assertEqual(summary["transfer_helped"], summary["ratio"] >= 1.05)
 
+    def test_transfer_supports_linear_algo(self) -> None:
+        summary = run_transfer(rounds=1, episodes=5, steps=20, eval_count=3, algo="linear")
+        self.assertEqual(summary["algo"], "linear")
+        self.assertEqual(len(summary["multi"]["rows"]), len(HELDOUT_CONFIGS))
+
     def test_train_and_heldout_configs_are_disjoint(self) -> None:
         train_keys = {(c["hazards"], c["lethal"]) for c in TRAIN_CONFIGS}
         heldout_keys = {(c["hazards"], c["lethal"]) for c in HELDOUT_CONFIGS}

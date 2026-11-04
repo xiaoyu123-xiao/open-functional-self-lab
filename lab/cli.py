@@ -691,6 +691,7 @@ def cmd_transfer(args: argparse.Namespace, ctx: Context) -> int:
         episodes=args.episodes,
         steps=args.steps,
         eval_count=args.eval_count,
+        algo=args.algo,
     )
     _emit(format_transfer(summary))
     ctx.ledger.append(
@@ -1251,6 +1252,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_transfer.add_argument("--episodes", type=int, default=50)
     p_transfer.add_argument("--steps", type=int, default=60)
     p_transfer.add_argument("--eval-count", type=int, default=20)
+    p_transfer.add_argument("--algo", choices=["tabular", "linear"], default="tabular")
     p_transfer.set_defaults(func=cmd_transfer)
 
     p_autonomy = sub.add_parser("autonomy", help="自主级别：locked / supervised / full（一次性给到位）")

@@ -21,7 +21,7 @@ from typing import Any, Dict, List, Sequence
 
 from .env import ACTIONS
 
-STATE_DIM = 17          # 13 基础特征 + 4 个墙体位（无墙信息时补 0，保证维度固定）
+STATE_DIM = 21          # 13 基础 + 4 墙体位 + 4 危险区分档（无信息时补 0）
 STATE_DIM_WITH_WALLS = STATE_DIM
 
 
@@ -41,12 +41,15 @@ def featurize(state: str) -> List[float]:
     vector += [1.0 if distance == bucket else 0.0 for bucket in range(4)]   # 距离档 one-hot
     vector += [1.0 if energy == bucket else 0.0 for bucket in range(3)]     # 能量档 one-hot
     vector += [1.0 if damage == 1 else 0.0]                                 # 损伤档
-    walls = parts[4] if len(parts) > 4 else ""
-    if walls:
-        vector += [1.0 if walls[index] == "1" else 0.0 for index in range(min(4, len(walls)))]
-        vector += [0.0] * (4 - min(4, len(walls)))
-    else:
-        vector += [0.0, 0.0, 0.0, 0.0]
+    walls = ""
+    hazard = ""
+    for token in parts[4:]:
+        if len(token) == 4 and set(token) <= {"0", "1"}:
+            walls = token
+        elif len(token) == 2 and token.startswith("h") and token[1].isdigit():
+            hazard = token[1]
+    vector += [1.0 if walls[index:index + 1] == "1" else 0.0 for index in range(4)]
+    vector += [1.0 if hazard == str(bucket) else 0.0 for bucket in range(4)]
     if len(vector) not in (STATE_DIM, STATE_DIM_WITH_WALLS):
         raise ValueError(f"特征维度异常：{len(vector)}")
     return vector

@@ -87,6 +87,18 @@ def _wall_code(env: GridWorld) -> str:
     return "".join(code)
 
 
+def _hazard_bucket(env: GridWorld) -> str:
+    """"任务身份"：危险区密度分档。没有它，同一观测在不同任务下会互相干扰（实验 0006）。"""
+    count = len(env.hazards)
+    if count <= 2:
+        return "h0"
+    if count <= 5:
+        return "h1"
+    if count <= 8:
+        return "h2"
+    return "h3"
+
+
 def state_of(env: GridWorld, with_walls: bool = False) -> str:
     """状态 =（食物方向 | 距离档 | 能量档 | 损伤档）。
 
@@ -102,6 +114,7 @@ def state_of(env: GridWorld, with_walls: bool = False) -> str:
     ]
     if with_walls:
         parts.append(_wall_code(env))
+    parts.append(_hazard_bucket(env))     # v0.13：任务身份，让多任务不再互相干扰
     return "|".join(parts)
 
 
