@@ -45,12 +45,15 @@ class GridWorld:
         size: int = SIZE,
         layout: str = "random",
         slippery: float = 0.0,
+        hazard_drift: int = 0,
     ) -> None:
         rng = random.Random(seed)
         self.size = int(size)
         self.layout = str(layout)
         self.slippery = max(0.0, min(1.0, float(slippery)))
         self.rng = rng
+        self.hazard_drift = int(hazard_drift)
+        self.steps_taken = 0
         cells = [(x, y) for x in range(self.size) for y in range(self.size)]
         rng.shuffle(cells)
 
@@ -131,9 +134,26 @@ class GridWorld:
             raise ValueError(f"未知动作：{action!r}（合法值：{', '.join(ACTIONS)}）")
         return x, y
 
+    def _drift_hazards(self) -> None:
+        """每隔 hazard_drift 步把危险区挪到新的空位（v0.31：分布漂移）。"""
+        if self.hazard_drift <= 0:
+            return
+        self.steps_taken += 1
+        if self.steps_taken % self.hazard_drift != 0:
+            return
+        free = [
+            (x, y)
+            for x in range(self.size)
+            for y in range(self.size)
+            if (x, y) not in self.walls and (x, y) not in self.food and (x, y) != self.agent
+        ]
+        self.rng.shuffle(free)
+        self.hazards = set(free[: len(self.hazards)])
+
     def step(self, action: str) -> Dict[str, object]:
         if self.slippery > 0.0 and self.rng.random() < self.slippery:
             action = self.rng.choice(["up", "down", "left", "right"])   # 打滑：动作被替换
+        self._drift_hazards()
         x, y = self._target(action)
         blocked = not (0 <= x < self.size and 0 <= y < self.size) or (x, y) in self.walls
         if not blocked:

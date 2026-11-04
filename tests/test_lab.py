@@ -553,6 +553,26 @@ class WeightedHeadTests(unittest.TestCase):
         self.assertEqual(len(summary["multi"]["runs"][0]["rows"]), len(HELDOUT_CONFIGS))
 
 
+class HazardDriftTests(unittest.TestCase):
+    """v0.31：危险区会移动（分布漂移）。"""
+
+    def test_hazards_move_on_schedule(self) -> None:
+        env = GridWorld(3, hazards=6, lethal=True, hazard_drift=4)
+        before = set(env.hazards)
+        for _ in range(4):
+            env.step("rest")
+        self.assertNotEqual(before, set(env.hazards))
+        self.assertEqual(len(env.hazards), 6)
+
+    def test_drift_is_deterministic_per_seed(self) -> None:
+        trail = []
+        for _ in range(2):
+            env = GridWorld(5, hazards=6, lethal=True, hazard_drift=3)
+            env.step("rest"); env.step("rest"); env.step("rest")
+            trail.append(sorted(env.hazards))
+        self.assertEqual(trail[0], trail[1])
+
+
 class SlipperyAndDiagTests(unittest.TestCase):
     """v0.29：打滑世界；以及"诊断不得边测边学"这条不变量。"""
 

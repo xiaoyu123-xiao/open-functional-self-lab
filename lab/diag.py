@@ -36,7 +36,7 @@ def measure_agreement(
     size: int = 8,
     layout: str = "random",
     with_path: bool = False,
-    slippery: float = 0.0,
+    slippery: float = 0.0, hazard_drift: int = 0,
     learn: bool = False,
 ) -> Dict[str, Any]:
     """跑一批回合，统计"智能体动作 == BFS 动作"的比例。"""
@@ -45,7 +45,7 @@ def measure_agreement(
     score = 0.0
     ate = 0
     for seed in seeds:
-        env = GridWorld(seed, hazards=hazards, lethal=lethal, armor=armor, size=size, layout=layout, slippery=slippery)
+        env = GridWorld(seed, hazards=hazards, lethal=lethal, armor=armor, size=size, layout=layout, slippery=slippery, hazard_drift=hazard_drift)
         state = state_of(env, with_path=with_path)
         previous = _distance_to_food(env)
         for _ in range(steps):
